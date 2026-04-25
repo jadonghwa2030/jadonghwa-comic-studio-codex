@@ -1,0 +1,176 @@
+import { AudienceLevel, ComicMode, DeliveryStyleId, DeliveryStylePreset, DeliveryStyleSpec } from "../types";
+
+export const DELIVERY_STYLE_PRESETS: DeliveryStylePreset[] = [
+  {
+    id: "standard",
+    label: "일반적(표준)",
+    instruction:
+      "말투는 주제와 독자 수준에 어울리는 자연스러운 한국어 구어체를 사용하세요. 말풍선은 학습만화/웹툰처럼 짧고 살아있게 쓰고, 필요한 개념은 캐릭터가 실제로 말할 법한 쉬운 말로 풀어주세요. 제스처는 과장하지 말고 자연스럽게(가리키기/끄덕임/손바닥 펼치기) 사용하세요.",
+    recommended_audience: ["kids", "teen", "beginner", "intermediate", "expert"]
+  },
+  {
+    id: "community",
+    label: "인터넷 커뮤니티 말투",
+    instruction:
+      "인터넷 커뮤니티의 가벼운 리듬(짧은 문장, 리액션, 밈 느낌)을 살리되, 욕설/비하/혐오 표현은 절대 금지입니다. 독자가 이해하기 쉽도록 핵심은 또렷하게 말하세요. 제스처는 과장된 리액션(당황, 손바닥으로 '짠', 과장된 표정)을 가볍게 곁들이세요.",
+    recommended_audience: ["teen", "beginner", "intermediate"]
+  },
+  {
+    id: "friendly_banmal",
+    label: "친근한 반말",
+    instruction:
+      "다정한 친구처럼 친근한 반말로 말하되, 무례하거나 비하하는 느낌은 금지입니다. 문장은 짧게 끊고, 중요한 용어도 딱딱한 정의문보다 친구가 쉽게 풀어주는 말투로 설명하세요. 제스처는 친근하게(어깨 으쓱, 손 흔들기, 하이파이브) 사용하세요.",
+    recommended_audience: ["kids", "teen", "beginner"]
+  },
+  {
+    id: "elder",
+    label: "어르신 대상",
+    instruction:
+      "어르신도 편하게 이해할 수 있게 쉬운 단어를 우선하고, 속도를 천천히(핵심→예시→한 줄 요약) 가져가세요. 존댓말을 사용하고, 너무 최신 유행어/영어 남발은 피하세요. 제스처는 차분하게(손으로 도표 그리기, 고개 끄덕임) 사용하세요.",
+    recommended_audience: ["beginner", "intermediate"]
+  },
+  {
+    id: "half_honorific",
+    label: "반존대",
+    instruction:
+      "반말과 존댓말을 섞는 '반존대' 톤으로 진행하세요. 예: \"그거 알지? 근데 중요한 건 이거예요.\" 같은 리듬. 다만 상대를 깎아내리거나 꼽주는 느낌은 금지입니다. 제스처는 장난스럽게(손가락으로 콕, 윙크는 과하지 않게) 사용하세요.",
+    recommended_audience: ["teen", "beginner"]
+  },
+  {
+    id: "military",
+    label: "군인 말투",
+    instruction:
+      "군대식 보고/지시 말투를 코믹하게 사용하되, 폭력/가혹행위/혐오를 미화하지 마세요. 예: \"정리하겠습니다\", \"핵심은 두 가지입니다\" 같은 구조화된 표현. 제스처는 경례/자세 바로/수첩 기록 같은 동작을 가볍게 사용하세요.",
+    recommended_audience: ["teen", "beginner", "intermediate"]
+  },
+  {
+    id: "marine_literature",
+    label: "해병문학체",
+    instruction:
+      "해병문학체의 과장된 서사/웅장한 어투를 패러디로 사용하되, 과격한 폭력·혐오·모욕 표현은 절대 금지입니다. 학습 내용이 묻히지 않게, 매 컷의 핵심 개념은 '정확한 한 문장'으로 분리해 선명하게 전달하세요. 제스처는 과장된 결연함(주먹 쥠, 바람에 휘날리는 망토 같은 연출)을 사용하세요.",
+    recommended_audience: ["teen", "beginner", "intermediate"]
+  },
+  {
+    id: "strict_teacher",
+    label: "표독한 선생님",
+    instruction:
+      "엄격하고 단호한 선생님 말투로 진행하되, 인신공격/모욕/비하는 금지입니다(예: \"이걸 모르면 바보다\" 금지). 대신 기준을 제시하고 오답을 교정하는 방식으로. 제스처는 분필로 칠판 두드리기, 손가락으로 포인트 찍기 등 '수업 장면' 중심으로 사용하세요.",
+    recommended_audience: ["teen", "beginner", "intermediate", "expert"]
+  },
+  {
+    id: "kindergarten_teacher",
+    label: "유치원 선생님",
+    instruction:
+      "유치원 선생님처럼 아주 상냥하고 쉬운 말로, 짧은 문장과 반복(핵심 단어 1~2회)으로 설명하세요. 무서운 표현/불안 조장은 금지입니다. 제스처는 박수, 손 하트, 손가락으로 '하나-둘-셋' 세기 등으로 크게 보여 주세요.",
+    recommended_audience: ["kids"]
+  },
+  {
+    id: "sensual_pg13",
+    label: "관능적인 말투(PG-13)",
+    instruction:
+      "전체 톤은 은근하고 매혹적이되(가벼운 플러팅/감각적 비유 정도), 노골적 성적 표현/성행위/신체 부위의 성적 묘사는 절대 금지입니다. 학습 주제가 중심이어야 하고, 분위기는 '세련된 라디오 DJ' 정도로만 유지하세요. 제스처는 과하지 않게(미소, 눈맞춤, 손끝으로 포인트) 사용하세요.",
+    recommended_audience: ["beginner", "intermediate", "expert"],
+    unsafe_for_audience: ["kids", "teen"]
+  },
+  {
+    id: "korean_american",
+    label: "미국교포 말투",
+    instruction:
+      "한국어 중심으로 말하되, 자연스러운 코드 스위칭(가끔 짧은 영어 단어/구절)을 섞으세요. 억지 억양/조롱/고정관념은 금지입니다. 예: \"포인트는 this part야\" 정도의 가벼운 삽입. 제스처는 자신감 있게(손바닥 펼치며 강조, 어깨 가볍게 으쓱) 사용하세요.",
+    recommended_audience: ["teen", "beginner", "intermediate", "expert"]
+  },
+  {
+    id: "custom",
+    label: "직접 입력(커스텀)",
+    instruction:
+      "사용자 지정 말투/제스처 지침을 그대로 따르되, 욕설/혐오/비하/노골적 성적 표현은 금지입니다.",
+    recommended_audience: ["kids", "teen", "beginner", "intermediate", "expert"]
+  }
+];
+
+const findPreset = (id: DeliveryStyleId | string | undefined): DeliveryStylePreset =>
+  DELIVERY_STYLE_PRESETS.find((p) => p.id === id) || DELIVERY_STYLE_PRESETS[0];
+
+const CINEMATIC_PRESET_INSTRUCTIONS: Record<DeliveryStyleId, string> = {
+  standard:
+    "자연스러운 구어체로 짧고 밀도 있게 말하세요. 설명/정의/강의문 톤은 금지하고, 감정선과 관계 변화가 드러나는 대사만 사용하세요. 제스처는 과장보다 리듬(멈춤, 시선 이동, 짧은 손동작) 중심으로.",
+  community:
+    "커뮤니티 리듬(짧은 반응, 날렵한 템포)을 살리되 장면 몰입을 깨는 밈 남발은 금지하세요. 욕설/비하/혐오 표현 금지. 대사는 감정 반응과 갈등 전개에만 쓰세요.",
+  friendly_banmal:
+    "친근한 반말을 쓰되 가벼운 수다체가 아니라 감정 충돌이 살아있는 대사로 유지하세요. 설명형 문장 금지. 제스처는 친근하지만 상황의 긴장을 유지하세요.",
+  elder:
+    "차분하고 명료한 존댓말을 유지하되 강의식 설명은 금지하세요. 대사는 짧고 인물의 선택/감정 변화가 보이게 작성하세요.",
+  half_honorific:
+    "반존대 리듬으로 자연스럽게 전개하되 조롱/비하 톤은 금지하세요. 설명형 문장 대신 관계 변화와 긴장을 드러내는 짧은 대사를 사용하세요.",
+  military:
+    "군대식 리듬은 어투 스타일로만 사용하고 폭력/가혹/혐오 미화는 금지하세요. 지시형 문장보다 갈등 국면의 결단/긴장을 드러내는 대사를 우선하세요.",
+  marine_literature:
+    "과장된 장르 어투는 유지하되 과격/혐오/모욕 표현은 금지하세요. 세계관 톤을 해치지 않는 범위에서 강렬하고 짧은 대사로 전개하세요.",
+  strict_teacher:
+    "단호한 톤은 허용하되 강의/훈계식 장문은 금지하세요. 인물 압박, 판단, 반응이 보이는 대사 중심으로 구성하세요.",
+  kindergarten_teacher:
+    "부드럽고 쉬운 어투를 유지하되 수업식 설명은 금지하세요. 안전하고 따뜻한 감정선 속에서 사건 반응 중심의 짧은 대사를 사용하세요.",
+  sensual_pg13:
+    "은근한 분위기는 허용하되 노골적 성적 표현은 금지하세요. 대사는 절제된 감정 긴장과 서브텍스트 중심으로 작성하세요.",
+  korean_american:
+    "한국어 중심의 자연스러운 코드스위칭은 허용하되 억지 표현/고정관념은 금지하세요. 설명보다 장면 리듬과 감정 반응을 살리는 짧은 대사를 사용하세요.",
+  custom:
+    "사용자 지정 톤을 따르되 설명/강의문 톤은 금지하고, 감정선/갈등/전환 중심의 시네마틱 대사로 유지하세요."
+};
+
+const getCinematicPresetInstruction = (preset: DeliveryStylePreset, customInstruction: string): string => {
+  const base = CINEMATIC_PRESET_INSTRUCTIONS[preset.id] || CINEMATIC_PRESET_INSTRUCTIONS.standard;
+  if (preset.id !== "custom") return base;
+  return customInstruction
+    ? `${base}\n\n[사용자 지정 추가 지침]\n${customInstruction}`
+    : base;
+};
+
+export const resolveDeliveryStyleSpec = (params: {
+  preset_id: DeliveryStyleId;
+  custom_instruction?: string;
+  audience_level: AudienceLevel;
+  comic_mode?: ComicMode;
+}): DeliveryStyleSpec => {
+  const preset = findPreset(params.preset_id);
+  const comicMode: ComicMode = params.comic_mode || "learning";
+  const isPureCinematic = comicMode === "pure_cinematic";
+
+  const isUnsafe =
+    Array.isArray(preset.unsafe_for_audience) && preset.unsafe_for_audience.includes(params.audience_level);
+
+  const userCustom = String(params.custom_instruction || "").trim();
+  const customTail =
+    preset.id === "custom" && userCustom
+      ? `\n\n[사용자 지정 추가 지침]\n${userCustom}`
+      : "";
+
+  if (isUnsafe) {
+    if (isPureCinematic) {
+      return {
+        preset_id: "standard",
+        preset_label: "시네마틱(표준) — (선택한 말투가 해당 독자층에 부적합하여 자동 순화됨)",
+        instruction: CINEMATIC_PRESET_INSTRUCTIONS.standard
+      };
+    }
+    return {
+      preset_id: "standard",
+      preset_label: "일반적(표준) — (선택한 말투가 해당 독자층에 부적합하여 자동 순화됨)",
+      instruction: DELIVERY_STYLE_PRESETS[0].instruction
+    };
+  }
+
+  if (isPureCinematic) {
+    return {
+      preset_id: preset.id,
+      preset_label: preset.label,
+      instruction: getCinematicPresetInstruction(preset, userCustom)
+    };
+  }
+
+  return {
+    preset_id: preset.id,
+    preset_label: preset.label,
+    instruction: `${preset.instruction}${customTail}`.trim()
+  };
+};

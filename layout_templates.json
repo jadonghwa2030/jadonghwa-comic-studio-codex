@@ -1,0 +1,261 @@
+
+[
+  {
+    "id": "classic_grid",
+    "label": "Classic 2x2 Grid",
+    "variety_tier": "low",
+    "canvas": { "w": 800, "h": 1200 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.05, "w": 0.44, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.51, "y": 0.05, "w": 0.44, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.51, "w": 0.44, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.51, "y": 0.51, "w": 0.44, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" }
+    ]
+  },
+  {
+    "id": "hero_top",
+    "label": "Hero Top Focus",
+    "variety_tier": "low",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.45 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.05, "y": 0.50, "w": 0.28, "h": 0.47 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.36, "y": 0.50, "w": 0.28, "h": 0.47 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.67, "y": 0.50, "w": 0.28, "h": 0.47 }, "z": 1, "target_aspect_ratio": "3:4" }
+    ]
+  },
+  {
+    "id": "hero_bottom",
+    "label": "Climax Hero Bottom",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.28, "h": 0.35 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.36, "y": 0.03, "w": 0.28, "h": 0.35 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.67, "y": 0.03, "w": 0.28, "h": 0.35 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.41, "w": 0.90, "h": 0.56 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "diagonal_split_v1",
+    "label": "Dynamic Diagonal Split",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1300 },
+    "panels": [
+      { "panel_index": 1, "shape": "poly", "poly": [[0.05, 0.05], [0.95, 0.05], [0.95, 0.25], [0.05, 0.45]], "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.05, 0.47], [0.95, 0.27], [0.95, 0.55], [0.05, 0.55]], "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.58, "w": 0.44, "h": 0.37 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.51, "y": 0.58, "w": 0.44, "h": 0.37 }, "z": 1, "target_aspect_ratio": "1:1" }
+    ]
+  },
+  {
+    "id": "inset_focus",
+    "label": "Zoom Inset Layout",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1200 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.05, "w": 0.90, "h": 0.60 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.60, "y": 0.40, "w": 0.30, "h": 0.20 }, "z": 3, "target_aspect_ratio": "3:2", "decor": { "shadow": true, "border_px": 8 } },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.68, "w": 0.44, "h": 0.27 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.51, "y": 0.68, "w": 0.44, "h": 0.27 }, "z": 1, "target_aspect_ratio": "1:1" }
+    ]
+  },
+  {
+    "id": "masonry_alt",
+    "label": "Asymmetric Masonry",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.50, "h": 0.40 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.58, "y": 0.03, "w": 0.37, "h": 0.25 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.58, "y": 0.30, "w": 0.37, "h": 0.35 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.45, "w": 0.50, "h": 0.52 }, "z": 1, "target_aspect_ratio": "9:16" }
+    ]
+  },
+  {
+    "id": "wide_strips",
+    "label": "Cinematic Wide Strips",
+    "variety_tier": "low",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.02, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.05, "y": 0.26, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.50, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.74, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "triptych_hero",
+    "label": "Triptych Hero Focus",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1300 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.05, "w": 0.60, "h": 0.90 }, "z": 1, "target_aspect_ratio": "9:16" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.68, "y": 0.05, "w": 0.27, "h": 0.28 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.68, "y": 0.36, "w": 0.27, "h": 0.28 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.68, "y": 0.67, "w": 0.27, "h": 0.28 }, "z": 1, "target_aspect_ratio": "1:1" }
+    ]
+  },
+  {
+    "id": "sandwich",
+    "label": "Sandwich Layout",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.05, "y": 0.25, "w": 0.44, "h": 0.50 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.51, "y": 0.25, "w": 0.44, "h": 0.50 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.77, "w": 0.90, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "diagonal_v2",
+    "label": "Sharp Diagonal V2",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "poly", "poly": [[0.05, 0.03], [0.60, 0.03], [0.40, 0.45], [0.05, 0.45]], "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.62, 0.03], [0.95, 0.03], [0.95, 0.45], [0.42, 0.45]], "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.48, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.72, "w": 0.90, "h": 0.25 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "quad_asymmetric",
+    "label": "Quad Asymmetric",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1200 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.05, "w": 0.60, "h": 0.44 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.67, "y": 0.05, "w": 0.28, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.51, "w": 0.28, "h": 0.44 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.35, "y": 0.51, "w": 0.60, "h": 0.44 }, "z": 1, "target_aspect_ratio": "4:3" }
+    ]
+  },
+  {
+    "id": "inset_strip",
+    "label": "Wide Strip w/ Inset",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.05, "w": 0.90, "h": 0.30 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.10, "y": 0.25, "w": 0.25, "h": 0.15 }, "z": 3, "target_aspect_ratio": "1:1", "decor": { "border_px": 10, "shadow": true } },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.45, "w": 0.90, "h": 0.25 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.72, "w": 0.90, "h": 0.25 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "i2v_frame_16_9",
+    "label": "I2V Frame 16:9",
+    "variety_tier": "low",
+    "canvas": { "w": 1600, "h": 900 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0, "y": 0, "w": 1, "h": 1 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "i2v_frame_9_16",
+    "label": "I2V Frame 9:16",
+    "variety_tier": "low",
+    "canvas": { "w": 900, "h": 1600 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0, "y": 0, "w": 1, "h": 1 }, "z": 1, "target_aspect_ratio": "9:16" }
+    ]
+  },
+  {
+    "id": "i2v_frame_1_1",
+    "label": "I2V Frame 1:1",
+    "variety_tier": "low",
+    "canvas": { "w": 1024, "h": 1024 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0, "y": 0, "w": 1, "h": 1 }, "z": 1, "target_aspect_ratio": "1:1" }
+    ]
+  },
+
+  {
+    "id": "webtoon_stack_3",
+    "label": "Webtoon 3-Stack",
+    "variety_tier": "low",
+    "canvas": { "w": 800, "h": 1422 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.03, "y": 0.02, "w": 0.94, "h": 0.24 }, "z": 1, "target_aspect_ratio": "5:4" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.22, "y": 0.34, "w": 0.56, "h": 0.21 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.30, "y": 0.64, "w": 0.42, "h": 0.18 }, "z": 1, "target_aspect_ratio": "4:5" }
+    ]
+  },
+  {
+    "id": "webtoon_hero_stack",
+    "label": "Webtoon Hero + Stack",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1422 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.01, "y": 0.02, "w": 0.98, "h": 0.38 }, "z": 1, "target_aspect_ratio": "4:5" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.23, "y": 0.48, "w": 0.54, "h": 0.21 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.31, "y": 0.76, "w": 0.40, "h": 0.15 }, "z": 1, "target_aspect_ratio": "4:5" }
+    ]
+  },
+  {
+    "id": "webtoon_stack_4",
+    "label": "Webtoon 4-Strip",
+    "variety_tier": "medium",
+    "canvas": { "w": 800, "h": 1422 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.04, "y": 0.02, "w": 0.92, "h": 0.17 }, "z": 1, "target_aspect_ratio": "5:4" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.24, "y": 0.26, "w": 0.52, "h": 0.13 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.12, "y": 0.47, "w": 0.66, "h": 0.17 }, "z": 1, "target_aspect_ratio": "4:5" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.32, "y": 0.72, "w": 0.40, "h": 0.14 }, "z": 1, "target_aspect_ratio": "4:5" }
+    ]
+  },
+  {
+    "id": "webtoon_impact",
+    "label": "Webtoon Impact",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1422 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0 }, "z": 1, "target_aspect_ratio": "9:16" }
+    ]
+  },
+
+  {
+    "id": "manga_6panel_classic",
+    "label": "Manga 6-Panel Classic",
+    "variety_tier": "low",
+    "canvas": { "w": 728, "h": 1032 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.52, "y": 0.03, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.03, "y": 0.03, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.52, "y": 0.35, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.03, "y": 0.35, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.52, "y": 0.67, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.03, "y": 0.67, "w": 0.45, "h": 0.30 }, "z": 1, "target_aspect_ratio": "4:3" }
+    ]
+  },
+  {
+    "id": "manga_5panel_dynamic",
+    "label": "Manga 5-Panel Dynamic",
+    "variety_tier": "medium",
+    "canvas": { "w": 728, "h": 1032 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.30, "y": 0.03, "w": 0.67, "h": 0.45 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.03, "y": 0.03, "w": 0.24, "h": 0.45 }, "z": 1, "target_aspect_ratio": "9:16" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.52, "y": 0.50, "w": 0.45, "h": 0.47 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.03, "y": 0.50, "w": 0.45, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.03, "y": 0.74, "w": 0.45, "h": 0.23 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "manga_7panel_dense",
+    "label": "Manga 7-Panel Dense",
+    "variety_tier": "high",
+    "canvas": { "w": 728, "h": 1032 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.52, "y": 0.02, "w": 0.45, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.03, "y": 0.02, "w": 0.45, "h": 0.28 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.52, "y": 0.24, "w": 0.45, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.03, "y": 0.33, "w": 0.94, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.52, "y": 0.55, "w": 0.45, "h": 0.22 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.03, "y": 0.55, "w": 0.45, "h": 0.22 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 7, "shape": "rect", "rect": { "x": 0.03, "y": 0.79, "w": 0.94, "h": 0.19 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  }
+]

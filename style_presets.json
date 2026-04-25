@@ -1,0 +1,623 @@
+[
+  {
+    "id": "kwebtoon_clean_pastel",
+    "category": "Webtoon",
+    "label": "한국 웹툰풍 · 파스텔 클린",
+    "render_mode": "illustration",
+    "style_prompt": "Korean webtoon style illustration, clean lineart, smooth pastel gradients, soft rim light, high readability, minimal texture, modern mobile webtoon look, expressive face, consistent character design, crisp edges",
+    "negative_style_prompt": "oil painting texture, heavy brush strokes, gritty noise, messy lines, watercolor bleed, low contrast, blurry",
+    "preview_hint": "요즘 웹툰 느낌의 깔끔한 파스텔 채색. 학습만화에 제일 무난."
+  },
+  {
+    "id": "kwebtoon_vivid_pop",
+    "category": "Webtoon",
+    "label": "한국 웹툰풍 · 선명 팝컬러",
+    "render_mode": "illustration",
+    "style_prompt": "modern webtoon illustration, vivid pop colors, clean cel shading, strong contrast, glossy highlights, punchy lighting, bright and energetic, clean outlines, simple background shapes for clarity",
+    "negative_style_prompt": "muted colors, monochrome, film grain, low saturation, muddy shading, cluttered background",
+    "preview_hint": "색감 쨍하고 에너지 넘치는 학습만화. 짧은 개념에 잘 맞음."
+  },
+  {
+    "id": "kwebtoon_romfan_sparkle",
+    "category": "Webtoon",
+    "label": "로맨스 판타지 · 화려함",
+    "render_mode": "illustration",
+    "style_prompt": "Korean romance fantasy webtoon style, shoujo manga aesthetic, sparkling eyes, intricate jewelry and costumes, blooming flowers background, soft warm lighting, dreamy atmosphere, detailed hair, elegant lines",
+    "negative_style_prompt": "grimdark, horror, ugly, simple, dull colors, rough sketch",
+    "preview_hint": "화려하고 블링블링한 로판 스타일. 감성적인 연출에 추천."
+  },
+  {
+    "id": "kwebtoon_murim_ink",
+    "category": "Webtoon",
+    "label": "무협 웹툰 · 먹선 강조",
+    "render_mode": "illustration",
+    "style_prompt": "martial arts webtoon style, dynamic ink brush strokes, high-speed motion blur effects, traditional oriental patterns, intense eyes, dramatic shadows, powerful energy aura (gi), atmospheric fog",
+    "negative_style_prompt": "cute, pastel, 3d, realistic, simple lines, western comic",
+    "preview_hint": "거친 먹선과 강렬한 연출. 역사/무술/동양적 테마."
+  },
+  {
+    "id": "kwebtoon_horror_webtoon",
+    "category": "Webtoon",
+    "label": "미스터리 스릴러 · 창백",
+    "render_mode": "illustration",
+    "style_prompt": "horror thriller webtoon style, desaturated pale colors, long shadows, uneasy atmosphere, sharp facial features, detailed expressions of fear, cinematic lighting, gritty texture",
+    "negative_style_prompt": "vibrant, happy, rainbow, simple, flat, cute children style",
+    "preview_hint": "창백한 톤과 무거운 분위기. 미스터리/괴담/경고 주제."
+  },
+  {
+    "id": "manga_screentone_bw",
+    "category": "Webtoon",
+    "label": "흑백 만화 · 스크린톤",
+    "render_mode": "illustration",
+    "style_prompt": "black and white manga panel art, crisp ink lines, screentone shading, cross-hatching, clean gutters, high contrast, expressive eyes, dynamic manga composition, readable bubble space",
+    "negative_style_prompt": "color, watercolor, painterly, photorealistic, low contrast, gray mush",
+    "preview_hint": "전통 만화책 느낌. 정보 전달이 또렷하고 인쇄물로도 좋음."
+  },
+  {
+    "id": "american_comic_modern",
+    "category": "Webtoon",
+    "label": "미국 코믹스 · 히어로",
+    "render_mode": "illustration",
+    "style_prompt": "modern american superhero comic style, heavy black shadows, bold contour lines, dynamic action poses, vibrant CMYK colors, dramatic angle, western comic book aesthetic, marvel/dc style",
+    "negative_style_prompt": "anime style, manga giant eyes, soft pastel, watercolor, blurry",
+    "preview_hint": "강렬한 명암과 역동적인 액션. 히어로물이나 강한 인상."
+  },
+  {
+    "id": "kwebtoon_sports_energy",
+    "category": "Webtoon",
+    "label": "스포츠 웹툰 · 활력",
+    "render_mode": "illustration",
+    "style_prompt": "energetic sports webtoon style, anatomy focus, sweat drops details, perspective shots, speed lines, high contrast vibrant colors, bright lighting, dynamic panel composition",
+    "negative_style_prompt": "static, boring, flat, dark, oil painting, slow movement",
+    "preview_hint": "근육 묘사와 속도감이 돋보이는 톤. 체육/활동성 주제."
+  },
+  {
+    "id": "kwebtoon_cyberpunk_light",
+    "category": "Webtoon",
+    "label": "사이버펑크 · 네온 웹툰",
+    "render_mode": "illustration",
+    "style_prompt": "cyberpunk anime style, neon lighting, rainy city night background, holographic display effects, futuristic tech, high contrast, purple and teal palette, clean lineart",
+    "negative_style_prompt": "nature, sun, rustic, vintage, watercolor, soft",
+    "preview_hint": "화려한 네온과 미래적 분위기. IT/코딩/미래 기술."
+  },
+  {
+    "id": "kwebtoon_crayon_child",
+    "category": "Webtoon",
+    "label": "친근한 크레파스 · 동심",
+    "render_mode": "illustration",
+    "style_prompt": "cute children comic style, crayon texture, simple rounded shapes, happy pastel colors, thick messy lines, hand-drawn warmth, naive art aesthetic",
+    "negative_style_prompt": "sharp, professional, dark, serious, complex, photoreal",
+    "preview_hint": "삐뚤빼뚤 정겨운 크레파스 느낌. 초등 저학년/심리 상담."
+  },
+  {
+    "id": "kwebtoon_minimal_line",
+    "category": "Webtoon",
+    "label": "심플 라벨 · 미니멀",
+    "render_mode": "illustration",
+    "style_prompt": "minimalist flat webtoon style, thin consistent lines, limited color palette, simple character features, clean negative space, modern graphic design look",
+    "negative_style_prompt": "detailed, textured, cluttered, realistic, shaded, heavy",
+    "preview_hint": "선의 미학. 세련되고 군더더기 없는 정보 전달."
+  },
+  {
+    "id": "kwebtoon_fantasy_watercolor",
+    "category": "Webtoon",
+    "label": "판타지 수채웹툰",
+    "render_mode": "illustration",
+    "style_prompt": "fantasy webtoon with watercolor texture, soft edge blending, dreamy color palette, magical light particles, whimsical character design, ethereal atmosphere",
+    "negative_style_prompt": "dark, gritty, vector, solid colors, sharp contrast",
+    "preview_hint": "수채화풍의 몽글몽글한 판타지 감성. 인문/예술/신화 주제."
+  },
+  {
+    "id": "noir_detective_comic",
+    "category": "Webtoon",
+    "label": "느와르 코믹 · 다크",
+    "render_mode": "illustration",
+    "style_prompt": "noir comic style, high contrast lighting, dramatic shadows, limited color palette with one accent color (e.g. red), clean ink outlines, cinematic composition, moody atmosphere but still readable, sin city vibe",
+    "negative_style_prompt": "pastel cute, bright cheerful, washed-out contrast, soft flat lighting, disney style",
+    "preview_hint": "추리/역사/사회 이슈를 진지하게 풀 때 분위기 살림."
+  },
+  {
+    "id": "kwebtoon_retro_manhwa",
+    "category": "Webtoon",
+    "label": "클래식 만화 · 명랑만화",
+    "render_mode": "illustration",
+    "style_prompt": "classic 80s 90s korean comic style, bold brush markers, comical expressions, warm paper color, halftone dots, nostalgic character design, bouncy lines",
+    "negative_style_prompt": "3d, modern, sleek, digital perfection, cold colors",
+    "preview_hint": "응답하라 감성. 유머러스한 명랑만화 연출에 최고."
+  },
+  {
+    "id": "kwebtoon_elegant_oil",
+    "category": "Webtoon",
+    "label": "회화적 웹툰 · 유채풍",
+    "render_mode": "illustration",
+    "style_prompt": "painterly digital webtoon style, visible oil paint strokes, rich textures, deep color depth, dramatic lighting, epic atmosphere, detailed environments",
+    "negative_style_prompt": "flat, vector, lineart focus, simple, minimalist",
+    "preview_hint": "유화 같은 묵직한 터치감. 예술/미학/대서사시 주제."
+  },
+  {
+    "id": "edu_textbook_inkwash",
+    "category": "Illustration",
+    "label": "교과서 삽화 · 잉크+수채",
+    "render_mode": "illustration",
+    "style_prompt": "educational textbook illustration, clean ink outlines, light watercolor wash, warm paper tone, gentle shading, simple shapes, friendly and informative, high legibility, neat composition",
+    "negative_style_prompt": "neon cyberpunk, heavy noise, gritty realism, over-detailed textures, messy paint",
+    "preview_hint": "교과서 삽화 같은 안정감. 과학/역사/상식 계열 무난."
+  },
+  {
+    "id": "ghibli_fantasy_art",
+    "category": "Illustration",
+    "label": "지브리풍 · 회화적 배경",
+    "render_mode": "illustration",
+    "style_prompt": "studio ghibli style animation background, gouache painting style, lush green nature, puffy white clouds, detailed painted background, simple character design with clear emotions, nostalgic summer vibe, peaceful atmosphere",
+    "negative_style_prompt": "3d render, plastic, neon, dark gritty, low resolution, ugly",
+    "preview_hint": "아름다운 배경과 감성적인 분위기. 자연/치유/여행 테마."
+  },
+  {
+    "id": "retro_90s_anime_cel",
+    "category": "Illustration",
+    "label": "90s 레트로 셀애니",
+    "render_mode": "illustration",
+    "style_prompt": "retro 1990s anime cel animation look, clean cel shading, slightly warm film tone, subtle analog softness (not blurry), simple highlights, nostalgic color grading, crisp character silhouette, sailor moon / evangelion era aesthetic",
+    "negative_style_prompt": "modern glossy 3D, hyperreal pores, heavy film grain, extreme blur, smeared lines, 4k modern anime",
+    "preview_hint": "옛 애니 셀화 느낌의 레트로 감성. 친근하고 ‘추억’ 톤."
+  },
+  {
+    "id": "soft_slice_of_life",
+    "category": "Illustration",
+    "label": "포근한 일상물 · 웜톤",
+    "render_mode": "illustration",
+    "style_prompt": "warm cozy slice-of-life illustration, soft sunlight, gentle shadows, pastel warm palette, comfortable indoor ambience, clean lines, friendly expressions, calm composition",
+    "negative_style_prompt": "harsh neon, horror mood, dramatic noir shadows, gritty texture, chaotic scene",
+    "preview_hint": "편안하고 따뜻한 분위기. 요리/생활/감정 주제에 찰떡."
+  },
+  {
+    "id": "flat_infographic_modern",
+    "category": "Illustration",
+    "label": "모던 인포그래픽 · 벡터",
+    "render_mode": "illustration",
+    "style_prompt": "modern flat vector infographic style, simple geometric shapes, clean icons, minimal shading, strong hierarchy, lots of white space, extremely readable, educational poster look, corporate art style but cute",
+    "negative_style_prompt": "painterly, messy textures, heavy gradients, photoreal, cluttered background, sketch",
+    "preview_hint": "정보 전달 최강. 비교/단계/요약형 학습, IT/경영."
+  },
+  {
+    "id": "pixel_art_retro",
+    "category": "Illustration",
+    "label": "픽셀 아트 · 레트로 게임",
+    "render_mode": "illustration",
+    "style_prompt": "high quality pixel art, 16-bit rpg game style, dithering, vibrant colors, cute sprites, isometric or side view, nostalgic gaming aesthetic, clean pixels",
+    "negative_style_prompt": "blur, vector, smooth line, painting, photoreal, 3d generation failure",
+    "preview_hint": "고전 게임 감성. IT/게임/가상세계 주제에 재미있음."
+  },
+  {
+    "id": "ill_pop_art",
+    "category": "Illustration",
+    "label": "팝 아트 · 앤디워홀",
+    "render_mode": "illustration",
+    "style_prompt": "classic pop art style, bold outlines, Ben-Day dots, vibrant primary colors, repetitive patterns, commercial art aesthetic, high contrast comic style",
+    "negative_style_prompt": "realistic, soft, faded, natural textures, complex shading",
+    "preview_hint": "강렬한 색감과 망점 효과. 트렌디한 디자인이나 예술 교육."
+  },
+  {
+    "id": "ill_charcoal_sketch",
+    "category": "Illustration",
+    "label": "목탄 데생 · 진지함",
+    "render_mode": "illustration",
+    "style_prompt": "charcoal sketch style, rough graphite texture, smudged shadows, expressive lines, art studio feel, monochrome or tinted, artistic depth",
+    "negative_style_prompt": "colorful, digital, vector, clean lines, simple, flat",
+    "preview_hint": "깊고 진지한 목탄 느낌. 철학/인물 탐구/미술 전문."
+  },
+  {
+    "id": "ill_vintage_ad",
+    "category": "Illustration",
+    "label": "빈티지 광고 · 50s 도안",
+    "render_mode": "illustration",
+    "style_prompt": "1950s vintage advertising illustration style, flat colors with slight print offset, mid-century modern aesthetic, simplified character forms, retro typography elements, weathered paper texture",
+    "negative_style_prompt": "digital, neon, modern, 3d, realistic, sharp",
+    "preview_hint": "미색 종이와 투박한 옵셋 인쇄. 고전 경제/생활 문화."
+  },
+  {
+    "id": "ill_blueprint_tech",
+    "category": "Illustration",
+    "label": "설계도 · 청사진",
+    "render_mode": "illustration",
+    "style_prompt": "technical blueprint style, cyan or architectural blue background, white thin precise lines, grid system, measurements annotations, engineering diagram aesthetic, clean and structured",
+    "negative_style_prompt": "natural, painterly, human, organic, messy, colorful",
+    "preview_hint": "정확한 도면 느낌. 건축/기계/구조 원리 설명."
+  },
+  {
+    "id": "ill_ukiyo_e",
+    "category": "Illustration",
+    "label": "우키요에 · 고전 판화",
+    "render_mode": "illustration",
+    "style_prompt": "traditional japanese ukiyo-e woodblock print style, flat color areas, bold black outlines, stylized waves/clouds, vintage japanese art aesthetic, paper texture",
+    "negative_style_prompt": "photoreal, 3d, modern, digital painting, soft shadows",
+    "preview_hint": "전통 목판화 느낌. 동양사/동양 미술/고전 문학."
+  },
+  {
+    "id": "ill_technical_cutaway",
+    "category": "Illustration",
+    "label": "테크니컬 · 단면도",
+    "render_mode": "illustration",
+    "style_prompt": "clean technical illustration, cutaway view, cross-section details, labeled parts (abstract), informative and clear, logical layout, industrial design aesthetic",
+    "negative_style_prompt": "abstract art, messy, low contrast, emotional, fuzzy",
+    "preview_hint": "속이 보이는 투시도. 인체/기계/지구 내부 구조."
+  },
+  {
+    "id": "ill_felt_embroidery",
+    "category": "Illustration",
+    "label": "펠트 자수 · 따스함",
+    "render_mode": "illustration",
+    "style_prompt": "handmade felt craft style, fabric textures, visible stitching details, embroidery aesthetic, soft plush feel, clean colors, high-key lighting",
+    "negative_style_prompt": "metal, plastic, photoreal, anime, digital line",
+    "preview_hint": "부드러운 천과 실의 감촉. 유아 교육/정서 발달/공예."
+  },
+  {
+    "id": "ill_modern_ink_wash",
+    "category": "Illustration",
+    "label": "현대 수묵 · 추상",
+    "render_mode": "illustration",
+    "style_prompt": "modern ink wash painting, zen aesthetic, expressive brush strokes, minimalist composition, wet-on-wet technique, beautiful ink bleeds, high artistic value",
+    "negative_style_prompt": "cartoon, busy, bright neon, complex, digital",
+    "preview_hint": "수채화보다 깊은 먹의 번짐. 명상/동양 철학/시."
+  },
+  {
+    "id": "paper_cutout_collage",
+    "category": "3D/Craft",
+    "label": "페이퍼 컷아웃 · 종이",
+    "render_mode": "mixed",
+    "style_prompt": "paper cutout collage style, layered paper textures, soft drop shadows between layers, handcrafted feel, clean readable composition, playful educational tone, cardboard texture",
+    "negative_style_prompt": "photoreal skin pores, glossy plastic 3D, messy glue artifacts, low resolution, drawing, ink lines",
+    "preview_hint": "아이들도 좋아하는 만들기 느낌. 창의력/과학 실험 주제."
+  },
+  {
+    "id": "clay_stopmotion_look",
+    "category": "3D/Craft",
+    "label": "클레이 스톱모션 · 점토",
+    "render_mode": "mixed",
+    "style_prompt": "clay stopmotion look, soft clay material, subtle fingerprints (very light), warm studio lighting, cute proportions, clean background, high readability, handcrafted charm, wallace and gromit style inspiration",
+    "negative_style_prompt": "hyperreal human skin, metallic hard surface, noisy render, uncanny face, 2d drawing",
+    "preview_hint": "귀엽고 입체감 있는 점토. 어린이/초급 학습 콘텐츠 필수."
+  },
+  {
+    "id": "isometric_3d_room",
+    "category": "3D/Craft",
+    "label": "아이소메트릭 3D · 미니어처",
+    "render_mode": "mixed",
+    "style_prompt": "isometric 3D render, cute miniature diorama, tilt-shift effect, soft global illumination, toy-like textures, clean pastel colors, sim city vibe, organized composition",
+    "negative_style_prompt": "2d, flat, perspective distortion, horror, dark, gritty",
+    "preview_hint": "작은 세상을 내려다보는 느낌. 구조/공간/도시 설명."
+  },
+  {
+    "id": "cinematic_3d_clean",
+    "category": "3D/Craft",
+    "label": "픽사풍 3D · 스튜디오",
+    "render_mode": "mixed",
+    "style_prompt": "clean 3D animated movie look, pixar style, smooth materials, soft studio lighting, pleasant subsurface scattering (subtle), crisp edges, friendly character, high clarity, not photoreal",
+    "negative_style_prompt": "photoreal pores, gritty noise, over-sharpen, horror lighting, uncanny realism, 2d sketch",
+    "preview_hint": "고급스럽고 또렷한 3D 애니메이션 톤. 전 주제 추천."
+  },
+  {
+    "id": "craft_low_poly",
+    "category": "3D/Craft",
+    "label": "로우 폴리 · 레트로 3D",
+    "render_mode": "mixed",
+    "style_prompt": "stylized low-poly 3D render, visible polygon edges, simple shading, vibrant and clean, toy aesthetic, game-ready look, high readability",
+    "negative_style_prompt": "high poly, realistic, curved, messy textures, blurry",
+    "preview_hint": "각진 평면의 매력. 게임/기하학/추상적 개념 설명."
+  },
+  {
+    "id": "craft_glassmorphism",
+    "category": "3D/Craft",
+    "label": "글래스모피즘 · 유리",
+    "render_mode": "mixed",
+    "style_prompt": "glassmorphism style 3D, frosted glass textures, translucent layers, soft colorful background bokeh, sleek modern UI feel, clean and premium lighting",
+    "negative_style_prompt": "opaque, dark, rough, organic, messy",
+    "preview_hint": "반투명 유리의 투명함. 테크/UI/심미성 강조 교육."
+  },
+  {
+    "id": "craft_plastic_blocks",
+    "category": "3D/Craft",
+    "label": "플라스틱 블록 · 조립",
+    "render_mode": "mixed",
+    "style_prompt": "plastic building blocks world, lego-inspired aesthetic, shiny plastic material, modular look, bright colors, studded surfaces, clean render",
+    "negative_style_prompt": "natural, organic, smooth, human skin, soft",
+    "preview_hint": "블록으로 만든 세상. 기질/구조/논리적 결합 주제."
+  },
+  {
+    "id": "craft_origami",
+    "category": "3D/Craft",
+    "label": "종이접기 · 오리가미",
+    "render_mode": "mixed",
+    "style_prompt": "origami paper folding style, crisp paper folds, clean studio lighting, delicate paper textures, minimal aesthetic, handcrafted paper art look",
+    "negative_style_prompt": "3d mesh, plastic, human, anime, digital painting",
+    "preview_hint": "접힌 종이의 고결함. 동물/수기/예술적 원리."
+  },
+  {
+    "id": "craft_ceramic_pottery",
+    "category": "3D/Craft",
+    "label": "세라믹 도자기 · 광택",
+    "render_mode": "mixed",
+    "style_prompt": "glazed ceramic pottery style, smooth glossy finish, organic hand-shaped forms, soft warm lighting, studio photoshoot, minimalist ceramic art aesthetic",
+    "negative_style_prompt": "rough, sharp, digital, lineart, complex textures",
+    "preview_hint": "매끄러운 도자기의 광택. 전통 예술/문화 유산/일상."
+  },
+  {
+    "id": "craft_cardboard_world",
+    "category": "3D/Craft",
+    "label": "골판지 월드 · 재활용",
+    "render_mode": "mixed",
+    "style_prompt": "cardboard box diorama style, corrugated paper texture, rough cut edges, tape and glue markers, eco-friendly craft aesthetic, warm homemade feel",
+    "negative_style_prompt": "metallic, sleek, professional, realistic, smooth",
+    "preview_hint": "택배 박스의 투박함. 환경/창의력 교육/생활 지식."
+  },
+  {
+    "id": "photoreal_edu_lifestyle",
+    "category": "Realism",
+    "label": "실사 · 라이프스타일",
+    "render_mode": "photoreal",
+    "style_prompt": "high-quality photorealistic educational lifestyle photography, natural daylight, informative atmosphere, characters interacting with educational props and relevant backgrounds, sharp focus, 35mm photography, high dynamic range, vibrant but natural colors, realistic skin textures",
+    "negative_style_prompt": "anime, illustration, drawing, painting, grainy, low quality, messy backgrounds, flat lighting, distorted faces",
+    "preview_hint": "생활 속 정보를 직접 보여주는 친근한 실사 톤."
+  },
+  {
+    "id": "photoreal_edu_expedition",
+    "category": "Realism",
+    "label": "실사 · 내셔널지오그래픽",
+    "render_mode": "photoreal",
+    "style_prompt": "cinematic outdoor educational photography, national geographic style, protagonist exploring and pointing at interesting site details, golden hour lighting, wide angle shots to show context, epic landscapes with clear educational focus, professional color grading, realistic textures, high quality photography",
+    "negative_style_prompt": "anime, 2d, illustration, drawing, painting, low light, blurry, bad anatomy, artificial studio look",
+    "preview_hint": "자연/여행/지리 주제에 압도적인 현장감."
+  },
+  {
+    "id": "photoreal_old_film",
+    "category": "Realism",
+    "label": "실사 · 고전 필름",
+    "render_mode": "photoreal",
+    "style_prompt": "vintage 1970s film photography look, kodachrome colors, slight film grain, soft lens flares, natural lighting, historical feel, authentic retro aesthetic",
+    "negative_style_prompt": "digital, sharp, modern, 4k, neon, hdr",
+    "preview_hint": "바랜 필름 사진의 매력. 역사/근현대사/아날로그 지식."
+  },
+  {
+    "id": "photoreal_cctv_security",
+    "category": "Realism",
+    "label": "실사 · CCTV 현장",
+    "render_mode": "photoreal",
+    "style_prompt": "CCTV security camera footage look, high angle, slightly low resolution, noise, high contrast black and white or greenish tint, date/time stamp overlay (abstract), realistic surveillance aesthetic",
+    "negative_style_prompt": "beautiful, cinematic, professional, clear, colorful",
+    "preview_hint": "현장 기록의 생생함. 범죄 예방/교통 안전/리얼리티."
+  },
+  {
+    "id": "photoreal_macro_science",
+    "category": "Realism",
+    "label": "실사 · 초접사 매크로",
+    "render_mode": "photoreal",
+    "style_prompt": "extreme macro photography, microscopic details, focus on tiny textures, shallow depth of field, professional laboratory lighting, high-end scientific photography, crystal clear details",
+    "negative_style_prompt": "far away, wide angle, blurry, anime, drawing",
+    "preview_hint": "현미경으로 보듯 자세한 관찰. 과학/생물/미세구조."
+  },
+  {
+    "id": "photoreal_infrared_vision",
+    "category": "Realism",
+    "label": "실사 · 열화상·적외선",
+    "render_mode": "photoreal",
+    "style_prompt": "thermal imaging infrared camera view, heat map colors (red, yellow, blue), high contrast, glowing figures, technological vision, scientific heat analysis aesthetic",
+    "negative_style_prompt": "natural colors, sunlight, traditional, soft",
+    "preview_hint": "온도를 보는 눈. 에네지/신체 변화/첨단 장비 원리."
+  },
+  {
+    "id": "photoreal_edu_presenter",
+    "category": "Realism",
+    "label": "실사 · 테크 유튜버",
+    "render_mode": "photoreal",
+    "style_prompt": "professional educational vlog aesthetic, bright and airy photography, shallow depth of field, natural and engaging poses, modern setting with topic-related gadgets and books, high resolution, realistic daylight, clear and crisp visuals, mkbhd vibe",
+    "negative_style_prompt": "staged studio look, heavy filters, low resolution, blurry, illustration, drawing, painting",
+    "preview_hint": "유튜버가 옆에서 설명해주는 듯한 생생한 감성."
+  },
+  {
+    "id": "photoreal_underwater_ocean",
+    "category": "Realism",
+    "label": "실사 · 수중 탐사",
+    "render_mode": "photoreal",
+    "style_prompt": "realistic underwater photography, blue-green water tint, light rays coming from surface (god rays), floating particles, aquatic life background, high-end dive camera aesthetic",
+    "negative_style_prompt": "dry, land, sun, clear air, indoor",
+    "preview_hint": "깊은 바닷속의 신비. 해양 생물/환경/지구 과학."
+  },
+  {
+    "id": "photoreal_polaroid_instant",
+    "category": "Realism",
+    "label": "실사 · 폴라로이드",
+    "render_mode": "photoreal",
+    "style_prompt": "instant polaroid film look, white square frame, slightly faded colors, authentic chemical develops texture, flash lighting, casual and candid feel, nostalgic memory aesthetic",
+    "negative_style_prompt": "professional, sharp, landscape, digital, 4k",
+    "preview_hint": "현상된 즉석 사진의 따뜻함. 생활 기록/인문 가치."
+  },
+  {
+    "id": "photoreal_lab_scientific",
+    "category": "Realism",
+    "label": "실사 · 사이언스 랩",
+    "render_mode": "photoreal",
+    "style_prompt": "clean photoreal laboratory or workshop setting, high-key lighting, macro focus on details and scientific instruments, minimalist and organized background, premium technical photography look, extremely clear and sharp visual data",
+    "negative_style_prompt": "anime, illustration, messy environment, dark noise, motion blur, artistic out-of-focus, bokeh excessive",
+    "preview_hint": "실제 실험 과정의 투명한 기록. 전공 과목 추천."
+  },
+  {
+    "id": "manga_80s_action",
+    "category": "Manga",
+    "label": "80년대 액션망가 · 북두의 권",
+    "render_mode": "illustration",
+    "style_prompt": "1980s japanese action manga style, Fist of the North Star aesthetic, extremely muscular anatomy, hyper-detailed ink crosshatching, dramatic heavy shadows, explosive impact lines, gritty post-apocalyptic tone, bold thick outlines, intense facial expressions, dynamic power poses, screentone shading, vintage manga paper texture",
+    "negative_style_prompt": "cute, pastel, soft, modern digital, chibi, simple lines, flat colors, western comic",
+    "preview_hint": "근육질 캐릭터와 강렬한 명암. 80년대 하드보일드 액션의 정수."
+  },
+  {
+    "id": "manga_80s_mecha",
+    "category": "Manga",
+    "label": "80년대 메카닉 · 건담",
+    "render_mode": "illustration",
+    "style_prompt": "1980s japanese mecha manga style, Gundam and Macross aesthetic, highly detailed mechanical parts, precise linework, technical hatching, space battle scenes, retro sci-fi color palette, dramatic cockpit angles, metallic reflections rendered in ink, vintage anime cel shading influence, starfield backgrounds",
+    "negative_style_prompt": "organic, cute, fantasy, watercolor, simple, flat, modern glossy 3D",
+    "preview_hint": "정교한 로봇 디테일과 우주 전투. 80년대 SF 메카물 감성."
+  },
+  {
+    "id": "manga_90s_battle",
+    "category": "Manga",
+    "label": "90년대 배틀망가 · 소년점프",
+    "render_mode": "illustration",
+    "style_prompt": "1990s japanese shonen battle manga style, Dragon Ball and Slam Dunk aesthetic, dynamic speed lines, energetic action poses, bold clean outlines, screentone gradients, expressive exaggerated reactions, powerful ki/aura energy effects, high contrast black and white with occasional tone, manga panel composition with dramatic angles",
+    "negative_style_prompt": "realistic, painterly, muted colors, static poses, western comic, soft shading, watercolor",
+    "preview_hint": "드래곤볼·슬램덩크 느낌의 역동적인 배틀 액션. 소년만화의 왕도."
+  },
+  {
+    "id": "manga_90s_shoujo",
+    "category": "Manga",
+    "label": "90년대 순정만화 · 꽃 배경",
+    "render_mode": "illustration",
+    "style_prompt": "1990s japanese shoujo manga style, Sailor Moon and Cardcaptor Sakura aesthetic, large sparkling eyes with detailed iris reflections, delicate thin linework, flower petal and sparkle screen effects, flowing hair with detailed strands, dreamy soft-focus backgrounds, ornate costume details, emotional atmosphere, screentone blush effects, romantic composition",
+    "negative_style_prompt": "muscular, gritty, dark horror, rough ink, western comic, heavy shadows, ugly",
+    "preview_hint": "반짝이는 큰 눈과 꽃잎 효과. 90년대 순정만화의 화려한 감성."
+  },
+  {
+    "id": "manga_90s_horror",
+    "category": "Manga",
+    "label": "90년대 공포망가 · 이토 준지",
+    "render_mode": "illustration",
+    "style_prompt": "1990s japanese horror manga style, Junji Ito aesthetic, extremely detailed cross-hatching and ink lines, grotesque body horror transformations, spiral and organic patterns, unsettling facial expressions, high contrast black and white, claustrophobic panel compositions, disturbing anatomical distortions, meticulous ink stippling, psychological terror atmosphere",
+    "negative_style_prompt": "colorful, cute, pastel, happy, simple, flat, chibi, bright",
+    "preview_hint": "이토 준지풍의 정교한 공포 표현. 소름 끼치는 잉크 해칭."
+  },
+  {
+    "id": "manga_2000s_shonen",
+    "category": "Manga",
+    "label": "2000년대 소년망가 · 나루토",
+    "render_mode": "illustration",
+    "style_prompt": "2000s japanese shonen manga style, Naruto and Bleach aesthetic, refined action sequences, dynamic ninja-style movement, detailed costume and weapon designs, clean bold outlines with moderate screentone, dramatic perspective shots, energy effect lines, expressive character poses, slightly more refined than 90s with better anatomy proportions",
+    "negative_style_prompt": "realistic photograph, oil painting, pastel cute, static, vintage retro, western",
+    "preview_hint": "나루토·블리치 세대의 세련된 소년만화. 닌자풍 액션과 드라마."
+  },
+  {
+    "id": "manga_2000s_romance",
+    "category": "Manga",
+    "label": "2000년대 순정 · 소녀만화",
+    "render_mode": "illustration",
+    "style_prompt": "2000s japanese shoujo romance manga style, Fruits Basket and Ouran aesthetic, clean delicate linework, elegant character proportions, soft screentone shading, sparkle and flower overlay effects, bishonen male characters, expressive emotional scenes, school uniform details, gentle atmospheric backgrounds, tender romantic composition",
+    "negative_style_prompt": "action, battle, gritty, rough, horror, heavy shadows, muscular",
+    "preview_hint": "깔끔한 선과 부드러운 톤. 2000년대 소녀만화의 섬세한 로맨스."
+  },
+  {
+    "id": "manga_2000s_seinen",
+    "category": "Manga",
+    "label": "2000년대 청년만가 · 데스노트",
+    "render_mode": "illustration",
+    "style_prompt": "2000s japanese seinen manga style, Death Note and Vagabond aesthetic, highly realistic character proportions, detailed facial features, dramatic chiaroscuro lighting, meticulous background art, psychological tension in composition, precise clean lines with detailed screentone, mature sophisticated art direction, cinematic panel layouts",
+    "negative_style_prompt": "chibi, cute, pastel, simple, childish, flat colors, cartoony",
+    "preview_hint": "데스노트·바가본드급 정교함. 사실적 비율과 심리적 긴장감."
+  },
+  {
+    "id": "manga_2000s_slice",
+    "category": "Manga",
+    "label": "2000년대 일상물 · 요츠바랑",
+    "render_mode": "illustration",
+    "style_prompt": "2000s japanese slice of life manga style, Yotsuba and Azumanga Daioh aesthetic, clean simple linework, warm cheerful atmosphere, expressive comedic faces, minimal screentone with open white spaces, gentle character proportions, everyday life scenes, bright and airy composition, subtle background details, heartwarming tone",
+    "negative_style_prompt": "dark, horror, complex, gritty, action explosion, heavy shading, dramatic",
+    "preview_hint": "요츠바랑의 밝고 따뜻한 일상. 심플하고 편안한 그림체."
+  },
+  {
+    "id": "manga_2010s_action",
+    "category": "Manga",
+    "label": "2010년대 액션 · 진격의 거인",
+    "render_mode": "illustration",
+    "style_prompt": "2010s japanese dark fantasy action manga style, Attack on Titan aesthetic, gritty rough line quality, intense dynamic ODM gear action sequences, dramatic wide panel compositions, heavy shadow work, desaturated dark tone, grotesque titan-like creature designs, military uniform details, raw emotional expressions, visceral impact effects",
+    "negative_style_prompt": "cute, pastel, romance, sparkle, soft, simple, bright cheerful",
+    "preview_hint": "진격의 거인풍 다크 판타지. 거칠고 역동적인 전투 연출."
+  },
+  {
+    "id": "manga_2010s_fantasy",
+    "category": "Manga",
+    "label": "2010년대 이세계 · 판타지",
+    "render_mode": "illustration",
+    "style_prompt": "2010s japanese isekai fantasy manga style, Re:Zero and Sword Art Online light novel illustration aesthetic, detailed fantasy armor and costume designs, RPG game UI influenced elements, magical effect particles, clean modern linework, screentone and gradient shading mix, epic fantasy landscapes, character status window aesthetic, vibrant atmosphere",
+    "negative_style_prompt": "realistic, gritty, horror, vintage retro, rough sketch, monochrome only",
+    "preview_hint": "이세계·RPG풍 판타지. 화려한 장비와 마법 이펙트."
+  },
+  {
+    "id": "manga_2010s_sports",
+    "category": "Manga",
+    "label": "2010년대 스포츠 · 하이큐",
+    "render_mode": "illustration",
+    "style_prompt": "2010s japanese sports manga style, Haikyuu aesthetic, dynamic athletic movement captured mid-action, detailed sweat and motion effects, energetic speed lines, precise anatomy in motion, expressive team dynamics, gymnasium and court environments, dramatic angle shots from below, impactful ball-hitting moments, clean modern linework with bold screentone",
+    "negative_style_prompt": "static, fantasy magic, mecha robot, horror, slow, painterly, soft",
+    "preview_hint": "하이큐처럼 역동적인 스포츠 액션. 땀방울과 속도감이 살아있는 연출."
+  },
+  {
+    "id": "manga_2010s_romance",
+    "category": "Manga",
+    "label": "2010년대 로맨스 · 학원물",
+    "render_mode": "illustration",
+    "style_prompt": "2010s japanese romance manga style, modern school setting, clean refined linework, bishonen and bishoujo character designs, subtle blush effects, elegant uniform details, soft atmospheric backgrounds with light bokeh effect, emotional close-up compositions, gentle screentone gradients, contemporary fashion sense, heartfelt expressions",
+    "negative_style_prompt": "action battle, muscular, horror, rough, gritty, dark shadows, old vintage",
+    "preview_hint": "깔끔한 미형 캐릭터의 학원 로맨스. 세련된 현대 순정풍."
+  },
+  {
+    "id": "manga_2020s_action",
+    "category": "Manga",
+    "label": "2020년대 액션 · 주술회전",
+    "render_mode": "illustration",
+    "style_prompt": "2020s japanese action manga style, Jujutsu Kaisen aesthetic, modern stylized dynamic compositions, bold thick expressive lines, creative panel-breaking layouts, cursed energy dark effects, high contrast black fills, contemporary fashion in character designs, fluid martial arts choreography, experimental ink splatter effects, intense close-up expressions",
+    "negative_style_prompt": "cute pastel, retro vintage, simple flat, soft romance, realistic photograph",
+    "preview_hint": "주술회전풍 현대 액션. 세련된 구도와 강렬한 잉크 효과."
+  },
+  {
+    "id": "manga_2020s_dark",
+    "category": "Manga",
+    "label": "2020년대 다크 · 체인소맨",
+    "render_mode": "illustration",
+    "style_prompt": "2020s japanese dark manga style, Chainsaw Man aesthetic, grungy raw line quality, chaotic action compositions, horror-comedy tone, experimental panel layouts, rough textured inking, punk rock aesthetic, urban gritty environments, grotesque creature designs with personality, bold unconventional storytelling visuals, heavy black ink areas",
+    "negative_style_prompt": "clean, cute, polished, sparkle, romance, traditional, conservative layout",
+    "preview_hint": "체인소맨의 그런지하고 실험적인 스타일. 펑크 감성 다크 코미디."
+  },
+  {
+    "id": "manga_2020s_romance",
+    "category": "Manga",
+    "label": "2020년대 로맨스 · 트렌디",
+    "render_mode": "illustration",
+    "style_prompt": "2020s japanese modern romance manga style, My Dress-Up Darling and Oshi no Ko aesthetic, ultra-clean digital linework, trendy fashion-forward character designs, social media influenced composition, soft gradient tones, contemporary hairstyles and accessories, bright and airy atmosphere, detailed eye art with modern sparkle effects, smartphone and pop culture references",
+    "negative_style_prompt": "vintage, old style, rough ink, dark horror, gritty, heavy shadows, monochrome",
+    "preview_hint": "SNS 세대의 트렌디한 로맨스. 최신 패션과 깔끔한 디지털 선."
+  },
+  {
+    "id": "manga_2020s_comedy",
+    "category": "Manga",
+    "label": "2020년대 코미디 · 스파이패밀리",
+    "render_mode": "illustration",
+    "style_prompt": "2020s japanese comedy action manga style, Spy x Family aesthetic, clean polished linework, charming character expressions, retro-modern spy thriller setting, elegant yet comedic compositions, cute child character with exaggerated reactions, sophisticated costume designs, warm family atmosphere mixed with action, balanced screentone use, accessible and inviting art style",
+    "negative_style_prompt": "horror, grotesque, dark gritty, rough messy lines, monochrome serious, old vintage",
+    "preview_hint": "스파이패밀리의 밝고 귀여운 액션코미디. 온 가족이 즐기는 분위기."
+  },
+  {
+    "id": "manga_chibi_sd",
+    "category": "Manga",
+    "label": "치비/SD · 2등신 캐릭터",
+    "render_mode": "illustration",
+    "style_prompt": "japanese chibi super-deformed manga style, 2-3 head proportion characters, oversized expressive heads, tiny cute bodies, exaggerated emotional reactions, simple clean outlines, minimal background details, comedic effect lines, dot eyes or large sparkly eyes, cute rounded forms, kawaii aesthetic, playful energetic poses",
+    "negative_style_prompt": "realistic proportions, detailed anatomy, serious, dark, horror, complex backgrounds",
+    "preview_hint": "2~3등신의 귀여운 캐릭터. 개그·요약·캐릭터 소개에 딱."
+  },
+  {
+    "id": "manga_josei_mature",
+    "category": "Manga",
+    "label": "조세이 · 성숙한 로맨스",
+    "render_mode": "illustration",
+    "style_prompt": "japanese josei manga style, Nana and Paradise Kiss aesthetic, mature sophisticated character designs, elegant fashion illustration influence, refined delicate linework, realistic body proportions, urban lifestyle settings, subtle emotional expressions, stylish panel compositions, contemporary adult romance atmosphere, detailed clothing and accessory rendering, muted elegant screentone",
+    "negative_style_prompt": "childish, chibi, action battle, fantasy magic, bright colorful, simple cartoony",
+    "preview_hint": "성숙하고 세련된 조세이풍. 패션·도시·어른의 감성."
+  },
+  {
+    "id": "manga_shonen_classic",
+    "category": "Manga",
+    "label": "클래식 소년만가 · 원피스",
+    "render_mode": "illustration",
+    "style_prompt": "classic japanese shonen manga style, One Piece aesthetic, bold exaggerated character designs, wild creative proportions, adventurous dynamic compositions, detailed pirate and fantasy world-building, energetic action with comedic expressions, thick confident outlines, expressive speed lines, dramatic double-page spread energy, iconic pose compositions, rich screentone textures",
+    "negative_style_prompt": "realistic, subtle, minimalist, horror, dark muted, soft romantic, static boring",
+    "preview_hint": "원피스처럼 과감하고 모험적인 소년만화의 정석. 자유로운 상상력."
+  }
+]
