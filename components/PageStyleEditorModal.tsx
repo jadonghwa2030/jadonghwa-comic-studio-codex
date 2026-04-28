@@ -71,7 +71,7 @@ export const PageStyleEditorModal: React.FC<Props> = ({
       set.add(p.category || "Uncategorized");
     });
     // Create a fixed order if valuable, otherwise just sort
-    const ordered = ["Webtoon", "Manga", "Illustration", "3D/Craft", "Realism", "Uncategorized"];
+    const ordered = ["Webtoon", "Anime", "Manga", "Illustration", "3D/Craft", "Realism", "Uncategorized"];
     return ordered.filter((c) => set.has(c));
   }, [presets]);
 

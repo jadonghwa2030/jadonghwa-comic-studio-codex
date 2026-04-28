@@ -24,10 +24,23 @@ const CONTENT_SAFETY_VISUAL_GUARD = [
 export interface FullPageImageRequest {
   prompt: string;
   referenceImages: string[];
+  referenceItems: FullPageImageReference[];
   imageProvider: ImageProvider;
   codexImageModel: string;
   codexImageQuality: CodexImageQuality;
   codexSize: string;
+}
+
+export type FullPageImageReferenceKind =
+  | "character_identity"
+  | "style_reference"
+  | "style_consistency"
+  | "product_reference";
+
+export interface FullPageImageReference {
+  kind: FullPageImageReferenceKind;
+  label: string;
+  image_url: string;
 }
 
 const parseAspectRatioValue = (value: string): number | null => {
@@ -476,6 +489,18 @@ const getLayoutDescription = (templateId: string, page?: PageSpec): string => {
     "sandwich": "One wide panel at the top, two vertical panels in the middle, and one wide panel at the bottom.",
     "quad_asymmetric": "Four panels with varying widths and heights, creating a non-uniform but structured rhythm.",
     "inset_strip": "Wide horizontal strips where one panel contains a smaller 'picture-in-picture' inset for close-ups.",
+    "cinematic_definition_3": "Three-panel cinematic definition page: one large concept image, one overlapping detail inset, and one wide explanation payoff panel.",
+    "impact_reveal_3": "Three-panel suspense-to-reveal page: compact setup, centered pause beat, then one large dramatic answer/reveal panel.",
+    "debate_collision_5": "Five-panel debate page with opposing diagonal speakers, a small reaction inset, an evidence strip, and a final synthesis strip.",
+    "misconception_crack_5": "Five-panel misconception page where a false idea is cracked by a diagonal correction, followed by example/counterexample and a rule panel.",
+    "investigation_board_7": "Seven-panel investigation board with a tall case panel, clue/evidence close-ups, reasoning beats, and a conclusion area.",
+    "quiz_tension_6": "Six-panel quiz page with question, choices, hesitation beats, and a large answer reveal at the bottom.",
+    "myth_fact_split_5": "Five-panel myth-versus-fact split with opposing angled halves, supporting evidence panels, and a synthesis panel.",
+    "timeline_burst_6": "Six-panel timeline montage with angled early beats, quick middle moments, and one large present-meaning panel.",
+    "cause_effect_chain_6": "Six-panel staggered cause-effect chain that leads the eye through cause, mechanism, result, exception, and warning.",
+    "process_cutaway_6": "Six-panel process cutaway with one large diagram/cross-section panel and smaller sequential explanation beats.",
+    "zoom_cascade_5": "Five-panel evidence zoom cascade: wide scene, overlapping close-up inset, analysis/reaction pair, and takeaway strip.",
+    "experiment_failure_7": "Seven-panel experiment page: setup, attempt, unexpected result, reaction beats, diagnosis, and principle reveal.",
     "i2v_frame_16_9": "Single full-frame cinematic canvas (16:9).",
     "i2v_frame_9_16": "Single full-frame vertical canvas (9:16).",
     "i2v_frame_1_1": "Single full-frame square canvas (1:1).",
@@ -484,6 +509,61 @@ const getLayoutDescription = (templateId: string, page?: PageSpec): string => {
     "manga_7panel_dense": "Dense action manga page with 7 panels of varied sizes. Right-to-left reading order with a full-width panel in the middle."
   };
   return descriptions[templateId] || "A multi-panel comic layout with 4 distinct sections divided by white gutters.";
+};
+
+const getLearningLayoutIntentDescription = (page: PageSpec): string => {
+  const intent = page.layout.learning_layout_intent;
+  if (!intent) return "";
+  return [
+    `Learning layout intent: ${intent.role}.`,
+    `Visual flow: ${intent.visual_flow}.`,
+    `Focus panel: Panel ${intent.focus_panel_index}.`,
+    `Information density: ${intent.density}.`,
+    `Reason: ${intent.template_reason}`,
+  ].join(" ");
+};
+
+const getTemplatePanelBounds = (panel: NonNullable<PageSpec["layout"]["template_panels"]>[number]) => {
+  if (panel.shape === "rect" && panel.rect) return panel.rect;
+  const points = panel.poly || [];
+  const xs = points.map((point) => Number(point[0])).filter(Number.isFinite);
+  const ys = points.map((point) => Number(point[1])).filter(Number.isFinite);
+  if (xs.length === 0 || ys.length === 0) return null;
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+};
+
+const getStaticTemplateGeometryGuide = (page: PageSpec): string => {
+  const templatePanels = page.layout.template_panels;
+  if (!Array.isArray(templatePanels) || templatePanels.length === 0) return "";
+  const fullWidthCount = templatePanels.filter((panel) => {
+    const bounds = getTemplatePanelBounds(panel);
+    return bounds ? bounds.w >= 0.82 : false;
+  }).length;
+  const allFullWidth = fullWidthCount === templatePanels.length;
+  const lines = templatePanels.map((panel) => {
+    const bounds = getTemplatePanelBounds(panel);
+    const shapeCue = panel.shape === "poly" ? "angled/slanted panel" : "rectangular panel";
+    const decorCue = panel.decor?.shadow || panel.decor?.border_px
+      ? " inset/overlap styling"
+      : "";
+    if (!bounds) {
+      return `- Panel ${panel.panel_index}: ${shapeCue}${decorCue}; target aspect ${panel.target_aspect_ratio}.`;
+    }
+    return `- Panel ${panel.panel_index}: ${shapeCue}${decorCue}; x ${formatPercent(bounds.x)}, y ${formatPercent(bounds.y)}, w ${formatPercent(bounds.w)}, h ${formatPercent(bounds.h)}; target aspect ${panel.target_aspect_ratio}.`;
+  });
+
+  return [
+    "[Template Geometry - Must Follow]",
+    "- Respect these approximate panel boxes and panel shapes.",
+    "- Do NOT redraw this page as equal full-width horizontal strips unless every listed panel is full-width.",
+    !allFullWidth ? "- This template intentionally mixes narrow, split, inset, angled, or overlapping panels. Preserve that visual rhythm." : "",
+    "- Do NOT duplicate earlier panels to fill the page. Each numbered panel must be a distinct scene beat.",
+    ...lines,
+  ].filter(Boolean).join("\n");
 };
 
 const svgToDataUrl = (svg: string): string =>
@@ -548,9 +628,13 @@ export const buildFullPageImageRequest = (
   const isWebtoon = publicationFormat === "webtoon";
   const isManga = publicationFormat === "manga";
   const isWebtoonScrollSegment = isWebtoon && Boolean(page.layout.scroll_choreography);
-  const layoutVisualGoal = isWebtoonScrollSegment
-    ? getWebtoonScrollChoreographyDescription(page)
-    : getLayoutDescription(page.layout.template_id, page);
+  const learningLayoutIntentDescription = getLearningLayoutIntentDescription(page);
+  const layoutVisualGoal = [
+    isWebtoonScrollSegment
+      ? getWebtoonScrollChoreographyDescription(page)
+      : getLayoutDescription(page.layout.template_id, page),
+    learningLayoutIntentDescription,
+  ].filter(Boolean).join(" ");
   const i2vAspectRatio = series.constraints?.i2v_aspect_ratio || "16:9";
   const isLearningComic = publicationFormat === "learning_comic";
   const resolvedAspectRatio = isKlingI2V
@@ -711,13 +795,13 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
 [캐릭터 동일성 유지 규칙 - 가장 중요]
 - 주인공의 얼굴 형태, 헤어스타일, 헤어 색상, 체형, 피부톤, 의상(색/패턴/액세서리)을 모든 패널에서 동일하게 유지하세요.
 - 컷마다 새로운 복장을 임의로 창작하거나, 헤어/나이/핵심 특징을 랜덤 변형하지 마세요.
-- 참조 이미지가 첨부된 경우, 해당 인물과 동일한 인물을 그리세요. 새로운 인물을 생성하지 마세요.
+- 참조 이미지가 첨부된 경우, 해당 인물의 생김새/정체성만 유지하세요. 원본 이미지의 실사감, 그림체, 선화, 채색, 조명, 렌즈감, 질감은 복사하지 말고 STYLE을 따르세요.
 - 예외: scene 설명에 '갈아입음/변장/시간 점프' 등이 명시된 경우에만 변경을 허용합니다.
 - 자유: 표정, 포즈, 구도, 카메라 앵글은 패널마다 자유롭게 변경할 수 있습니다.`
       : `
 [CHARACTER IDENTITY NOTE]
 - Keep the protagonist's core visual identity (face, hair, body type, outfit colors) consistent across all panels.
-- Reference images are attached — the character in the output should match the reference, not be a new person.
+- Character reference images are identity-only references: match the face, hair, body silhouette, outfit colors, and distinguishing marks, but ignore the source image's original medium, linework, lighting, color grading, texture, and rendering style.
 - Expressions, poses, and camera angles should vary naturally between panels.`;
 
   const characterConsistencyNote = "";
@@ -789,11 +873,19 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
     `label=${style.preset_label}`,
     `render_mode=${style.render_mode}`
   ].join(" | ");
+  const currentStyleReferenceKey = [
+    "photo-style-transfer-v1",
+    style.preset_id,
+    style.render_mode,
+    style.style_prompt,
+    style.user_style_prompt || ""
+  ].join("|");
 
   const stylePriorityLines = [
     "STYLE PRIORITY (CRITICAL)",
     `- STYLE IDENTITY TOKEN: ${styleIdentityToken}`,
     "- Treat STYLE (BASE/USER ADDITION) as the single source of truth for visual rendering.",
+    "- Use attached character images directly for likeness, then render the result in the selected STYLE.",
     isKlingI2V
       ? "- Keep the selected visual style consistent across the full frame."
       : `- Keep the selected visual style consistent across all ${page.panels.length} panels.`,
@@ -828,6 +920,13 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
     .filter(Boolean)
     .join("\n");
 
+  const referenceRoleRules = [
+    "REFERENCE IMAGES",
+    "- Character images: use directly as visual references for the character's likeness and recurring design.",
+    "- Style images: use for linework, palette, shading, and texture.",
+    "- Render everything in the selected STYLE."
+  ].join("\n");
+
   const i2vPanel = page.panels[0] || {
     scene: "",
     acting: "",
@@ -842,6 +941,17 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
 - EXACTLY ${page.panels.length} panels must be present on this single image.
 - Follow the "${page.layout.template_id}" pattern described above.
 - Ensure clear black frame lines separate each of the ${page.panels.length} scenes.`;
+  const learningLayoutIntentBlock = isLearningComic && page.layout.learning_layout_intent
+    ? `[Learning Comic Pro Layout Direction]
+- Keep the same page size and the selected ${page.panels.length}-panel template.
+- The page role is ${page.layout.learning_layout_intent.role}; stage the page to support that learning purpose.
+- Make Panel ${page.layout.learning_layout_intent.focus_panel_index} the clearest visual emphasis.
+- Reading flow: ${page.layout.learning_layout_intent.visual_flow}; information density: ${page.layout.learning_layout_intent.density}.
+- Template reason: ${page.layout.learning_layout_intent.template_reason}`
+    : "";
+  const staticTemplateGeometryBlock = !isWebtoonScrollSegment && !page.layout.template_id.startsWith("webtoon_")
+    ? getStaticTemplateGeometryGuide(page)
+    : "";
   const webtoonGeometryBlock = isWebtoon && !isWebtoonScrollSegment ? getWebtoonGeometryGuide(page) : "";
   const outputTypeLabel = isWebtoonScrollSegment
     ? `A Korean webtoon scroll segment (${WEBTOON_SCROLL_SEGMENT_CODEX_SIZE})`
@@ -855,6 +965,9 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
     : "5) NO OVERLAP: All text containers must stay strictly INSIDE their respective panel borders.";
   const textContainerContextRule = isWebtoonScrollSegment
     ? "8) SCROLL SEGMENT TEXT: Text may appear inside framed panels, borderless scenes, or open whitespace depending on the choreography. Do not invent extra panel boxes just to contain text."
+    : "";
+  const learningComicBubbleRhythmRule = isLearningComic
+    ? "8) LEARNING COMIC BUBBLE RHYTHM: Keep the explanation readable as one continuous thought across the page, not as chopped fragments. If a natural breath is too long for one panel, continue it across the next bubble/panel, a reaction beat, or a narration box at a natural pause point instead of forcing one oversized bubble. Place containers near the relevant speaker/reaction and vary placement across left/right/top/bottom safe areas. Do not stack every bubble on the left edge or turn the page into four text-heavy vertical strips."
     : "";
   const finalStructureCheck = isWebtoonScrollSegment
     ? "- Does it follow the scroll choreography instead of equal stacked boxes? Yes."
@@ -878,11 +991,15 @@ ${technicalInstruction}
 
 ${stylePriorityLines}
 
+${referenceRoleRules}
+
 ${toneNote}
 
 ${CONTENT_SAFETY_VISUAL_GUARD}
 
 ${structuralRequirementBlock}
+${learningLayoutIntentBlock ? `\n\n${learningLayoutIntentBlock}` : ""}
+${staticTemplateGeometryBlock ? `\n\n${staticTemplateGeometryBlock}` : ""}
 ${webtoonGeometryBlock ? `\n\n${webtoonGeometryBlock}` : ""}
 
 ────────────────────────────────────────
@@ -912,6 +1029,7 @@ ${textPlacementRule}
 ${fontReadabilityRule}
 7) CONTAINER DISTINCTION: Thought clouds and narration boxes must look VISUALLY DIFFERENT from speech bubbles. Do NOT render all text in identical speech bubbles.
 ${textContainerContextRule}
+${learningComicBubbleRhythmRule}
 
 ────────────────────────────────────────
 SAFETY (REAL PEOPLE)
@@ -946,6 +1064,8 @@ ${styleConsistencyImage ? "STYLE CONSISTENCY REFERENCE: A previously generated f
 ${technicalInstruction}
 
 ${stylePriorityLines}
+
+${referenceRoleRules}
 
 ${toneNote}
 
@@ -992,11 +1112,20 @@ ${mangaColorMode === "bw"
       : comicPrompt;
 
   // === IMAGE ATTACHMENT ORDER ===
-  // Priority: Text prompt → Character refs (highest) → Style refs → Product refs
-  // Character references are placed first so the model gives them the most attention.
+  // Priority: Text prompt → direct character refs → style refs → product refs.
   const parts: any[] = [{ text: fullPrompt }];
   const referenceImages: string[] = [];
+  const referenceItems: FullPageImageReference[] = [];
   const seenReferenceImages = new Set<string>();
+
+  const addReferenceItem = (kind: FullPageImageReferenceKind, label: string, dataUrl: string): boolean => {
+    if (!dataUrl || !dataUrl.startsWith("data:")) return false;
+    if (seenReferenceImages.has(dataUrl)) return false;
+    seenReferenceImages.add(dataUrl);
+    referenceImages.push(dataUrl);
+    referenceItems.push({ kind, label, image_url: dataUrl });
+    return true;
+  };
 
   // --- Character reference images (HIGHEST PRIORITY) ---
   const MAX_CHARACTER_REF_IMAGES = 3;
@@ -1007,22 +1136,28 @@ ${mangaColorMode === "bw"
     if (!dataUrl || !dataUrl.startsWith("data:")) return;
     const parsed = parseDataUrl(dataUrl);
     if (!parsed) return;
-    if (!seenReferenceImages.has(dataUrl)) {
-      seenReferenceImages.add(dataUrl);
-      referenceImages.push(dataUrl);
-    }
+    const attached = addReferenceItem("character_identity", label, dataUrl);
+    if (!attached) return;
     parts.push({ text: label });
     parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.base64 } });
     charAttachedCount += 1;
   };
 
+  const getDirectCharacterRefs = (character: CharacterSpec): string[] => {
+    const styleAlignedRefs = character.style_aligned_reference_style_key === currentStyleReferenceKey
+      ? (character.style_aligned_reference_images || []).filter(Boolean)
+      : [];
+    if (styleAlignedRefs.length > 0) return styleAlignedRefs;
+    return Array.isArray(character.reference_images) ? character.reference_images.filter(Boolean) : [];
+  };
+
   const attachAnchorProtagonistRefs = () => {
     const mainRef = series.anchors.protagonist.reference_images.main;
-    if (mainRef) attachCharRefImage("[PROTAGONIST REFERENCE IMAGE] Match this character exactly.", mainRef);
+    if (mainRef) attachCharRefImage("[DIRECT CHARACTER REFERENCE IMAGE] Use this image as the protagonist visual reference.", mainRef);
     for (const [idx, url] of (series.anchors.protagonist.reference_images.pack || []).entries()) {
       if (charAttachedCount >= MAX_CHARACTER_REF_IMAGES) break;
       if (url !== mainRef) {
-        attachCharRefImage(`[PROTAGONIST REFERENCE IMAGE] #${idx + 1}`, url);
+        attachCharRefImage(`[DIRECT CHARACTER REFERENCE IMAGE] Protagonist reference #${idx + 1}`, url);
       }
     }
   };
@@ -1033,12 +1168,12 @@ ${mangaColorMode === "bw"
 
     for (const c of protagonists) {
       const name = String(c?.name || "").trim() || "Unnamed";
-      const images = Array.isArray(c?.reference_images) ? c.reference_images : [];
+      const images = getDirectCharacterRefs(c);
       const seen = new Set<string>();
       for (let i = 0; i < images.length; i++) {
         if (seen.has(images[i])) continue;
         seen.add(images[i]);
-        attachCharRefImage(`[PROTAGONIST REFERENCE IMAGE] ${name} — match this character exactly.`, images[i]);
+        attachCharRefImage(`[DIRECT CHARACTER REFERENCE IMAGE] ${name}`, images[i]);
         if (charAttachedCount >= MAX_CHARACTER_REF_IMAGES) break;
       }
       if (charAttachedCount >= MAX_CHARACTER_REF_IMAGES) break;
@@ -1047,8 +1182,8 @@ ${mangaColorMode === "bw"
     for (const c of supporting) {
       if (charAttachedCount >= MAX_CHARACTER_REF_IMAGES) break;
       const name = String(c?.name || "").trim() || "Unnamed";
-      const images = Array.isArray(c?.reference_images) ? c.reference_images : [];
-      if (images.length > 0) attachCharRefImage(`[CHARACTER REFERENCE IMAGE] ${name} (${c.role})`, images[0]);
+      const images = getDirectCharacterRefs(c);
+      if (images.length > 0) attachCharRefImage(`[DIRECT CHARACTER REFERENCE IMAGE] ${name} (${c.role})`, images[0]);
     }
   } else {
     attachAnchorProtagonistRefs();
@@ -1058,10 +1193,7 @@ ${mangaColorMode === "bw"
   if (styleReferenceImage && styleReferenceImage.startsWith("data:")) {
     const parsed = parseDataUrl(styleReferenceImage);
     if (parsed) {
-      if (!seenReferenceImages.has(styleReferenceImage)) {
-        seenReferenceImages.add(styleReferenceImage);
-        referenceImages.push(styleReferenceImage);
-      }
+      addReferenceItem("style_reference", "Style reference image: linework, palette, shading, and texture only.", styleReferenceImage);
       parts.push({ text: "[STYLE REFERENCE IMAGE] Prioritize linework, palette, shading, and texture from this image." });
       parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.base64 } });
     }
@@ -1074,10 +1206,7 @@ ${mangaColorMode === "bw"
   ) {
     const parsed = parseDataUrl(styleConsistencyImage);
     if (parsed) {
-      if (!seenReferenceImages.has(styleConsistencyImage)) {
-        seenReferenceImages.add(styleConsistencyImage);
-        referenceImages.push(styleConsistencyImage);
-      }
+      addReferenceItem("style_consistency", "Style continuity reference: rendering pipeline and finish level only.", styleConsistencyImage);
       parts.push({ text: "[STYLE CONSISTENCY REFERENCE IMAGE] Match this page's rendering pipeline and finish level for continuity." });
       parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.base64 } });
     }
@@ -1090,10 +1219,7 @@ ${mangaColorMode === "bw"
     if (urls.length > 0 && urls[0].startsWith("data:")) {
       const parsed = parseDataUrl(urls[0]);
       if (parsed) {
-        if (!seenReferenceImages.has(urls[0])) {
-          seenReferenceImages.add(urls[0]);
-          referenceImages.push(urls[0]);
-        }
+        addReferenceItem("product_reference", `Product reference image: ${label}`, urls[0]);
         parts.push({ text: `[PRODUCT REFERENCE IMAGE] ${label}` });
         parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.base64 } });
       }
@@ -1103,6 +1229,7 @@ ${mangaColorMode === "bw"
   return {
     prompt: fullPrompt,
     referenceImages,
+    referenceItems,
     imageProvider,
     codexImageModel,
     codexImageQuality,
@@ -1133,7 +1260,7 @@ export const generateFullPageImage = async (
       size: request.codexSize,
       quality: request.codexImageQuality,
       moderation: "low",
-      reference_images: request.referenceImages
+      reference_images: request.referenceItems
     });
     if (typeof response.image_data_url === "string" && response.image_data_url.startsWith("data:")) {
       return response.image_data_url;

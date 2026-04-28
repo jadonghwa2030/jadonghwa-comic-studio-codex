@@ -132,7 +132,7 @@ export const generateGeminiResearchPack = async (params: {
     if (looksLikeHowToTopic(params.topic)) {
       return "질문 형태: Explain (How-to). '방법/절차/레시피/튜토리얼' 주제이므로, 오해 반박형 훅(“~라고 생각했겠지만…”)을 강제하지 말고 바로 따라할 수 있게 구성.";
     }
-    return '질문 형태: Explain (Concept / Standard). 첫 문장은 "A란/현재진행형이란/오늘은 A를 배워요"처럼 정의/목표로 바로 시작하세요. 도입에서 "단순히 ~가 아니라", "단순한 ~가 아니라", "그것은 단순한 ~가 아니라, ~다", "많이들 ~라고 생각하지만", "사실은", "오해/착각" 같은 AI식 반박/대조 프레이밍을 쓰지 마세요. 오해 교정은 필요할 때만 중후반에 짧게.';
+    return '질문 형태: Explain (Concept / Standard). 정의/목표 선언으로 바로 시작하지 말고, 독자가 눈으로 볼 수 있는 상황·대비·작은 궁금증에서 출발하세요. 도입에서 "단순히 ~가 아니라", "단순한 ~가 아니라", "그것은 단순한 ~가 아니라, ~다", "많이들 ~라고 생각하지만", "사실은", "오해/착각" 같은 AI식 반박/대조 프레이밍을 쓰지 마세요. 오해 교정은 필요할 때만 중후반에 짧게.';
   })();
 
   const notesHeaderHint = isPureCinematic
@@ -143,7 +143,7 @@ export const generateGeminiResearchPack = async (params: {
         : "[LOGLINE], [WORLD], [CHARACTER DESIRE], [CONFLICT], [TURNING POINT], [ENDING HOOK], [VISUAL MOTIFS], [UNKNOWN], [SAFETY REDLINES], [SCENE IDEAS]"
     : params.question_type === "review"
       ? "[PRODUCT], [CRITERIA], [PROS], [CONS], [VERDICT], [UNKNOWN], [DO NOT SAY], [SCENE IDEAS]"
-      : "[FRAMING], [ONE LINE], [KEY POINTS], [DEFINITIONS], [MISCONCEPTIONS], [UNKNOWN], [DO NOT SAY], [SCENE IDEAS]";
+      : "[LEARNING STORY], [OPENING CANDIDATES], [LEARNING UNITS], [PAGE BUDGET], [KEY POINTS], [DEFINITIONS], [MISCONCEPTIONS], [UNKNOWN], [DO NOT SAY], [SCENE IDEAS]";
 
   const modeLabel = isPureCinematic ? "CINEMATIC" : isEduCinematic ? "EDU-CINEMATIC" : "LEARNING";
 
@@ -165,6 +165,7 @@ export const generateGeminiResearchPack = async (params: {
 
 목표:
 - Google Search를 사용해 최신/기본 정보를 확인한 뒤, 플래너가 바로 사용할 수 있는 "Research Pack"을 만듭니다.
+- 교육 만화용 Research Pack은 정보 요약서가 아니라, 독자가 자연스럽게 궁금해지고 한 단계씩 이해하도록 돕는 학습 전개 설계서입니다.
 
 규칙(매우 중요):
 - 확인 불가/근거 부족은 반드시 "UNKNOWN"으로 표시하고, 추측으로 채우지 마세요.
@@ -183,12 +184,24 @@ ${roleLine}
   - 섹션 헤더는 ${notesHeaderHint} 권장
   - ${isPureCinematic ? "교훈/강의체 요약보다 장면화 가능한 행동/관계/소품 단서를 우선하세요." : '[MISCONCEPTIONS]: intro_style가 "오해 깨기"인 경우 1~3개를 우선 포함. 그 외에는 선택 사항(필요 없으면 생략하거나 "없음" 표기).'}
   - ${isPureCinematic && isActionTopic ? "주제가 액션/격투 계열이면 물리적 충돌 비트(공방/회피/반격)를 최소 2개 이상 포함하세요. (고어/절단/과도한 유혈은 금지)" : "SAFETY REDLINES는 혐오/명예훼손/노골적 성묘사/고어 중심으로 작성하고, 일반 액션 자체를 일괄 금지하지 마세요."}
+  - 교육 만화/학습만화 notes에는 [LEARNING STORY], [OPENING CANDIDATES], [LEARNING UNITS], [PAGE BUDGET] 섹션을 포함하세요.
+  - [LEARNING STORY]에는 "처음 보이는 장면 → 독자가 품을 질문 → 이름을 붙이는 순간 → 직접 확인/비교 → 작은 정리"의 흐름을 4~6줄로 적으세요.
+  - [OPENING CANDIDATES]에는 정의문이 아닌 오프닝 장면 2~3개를 적으세요. 예: 같은 사진인데 배경 흐림이 다른 상황, 빨래 물이 탁해지는 장면, 영어 문장을 보고 실제인지 추측인지 헷갈리는 순간.
+  - [LEARNING UNITS]의 각 unit은 한 페이지가 담당할 수 있는 학습 행동 1개로 쓰세요. 각 unit에는 reader_question, opening_scene, page_reveal, dont_explain_yet를 짧게 포함하세요.
+  - [PAGE BUDGET]에는 normal/detailed 페이지 수가 왜 필요한지, 어떤 unit이 합쳐지면 빽빽해지는지 적으세요.
+  - 교육 만화/학습만화의 [FRAMING]은 되도록 만들지 말고, 필요하면 [LEARNING STORY] 안에 흡수하세요. "첫 장면은 정의로 바로 시작", "첫 말풍선은 ○○란..."처럼 정의문 오프닝을 강제하지 마세요.
+  - 첫 unit은 보통 정의가 아니라 독자가 볼 수 있는 상황, 대비, 궁금증, 작은 문제에서 시작하세요. 이름 붙이기/정의는 궁금증이 생긴 뒤에 배치하세요.
+  - 절차/방법/언어 문법 주제는 특히 "정의+상황+예문+주의점+요약"을 한 페이지에 몰아넣지 않도록 unit을 쪼개세요.
 - sources: 참고 링크 3~8개 (title, uri)
 - page_suggestions: 이 Research Pack을 만화로 만들 때 적절한 페이지 수
   - brief: 가장 짧게 핵심만 보여줄 때
   - normal: 기본 추천
   - detailed: 장면/예시/주의점을 충분히 넣을 때
   - 각 값은 1 이상 정수
+  - 페이지 수는 "정보 항목 수"가 아니라 [LEARNING UNITS]의 개수와 학습 부담으로 정하세요.
+  - normal은 독자가 한 페이지에서 한 가지 학습 행동만 처리할 수 있게 잡으세요. 한 페이지에 정의/뜻/사용 상황/예문/해석/주의점/요약이 3개 이상 함께 들어가야 한다면 페이지를 늘리세요.
+  - brief는 압축 버전이지만 말풍선이 빽빽해질 정도로 낮추지 마세요.
+  - detailed는 예시, 반례, 연습, 주의점을 별도 페이지로 분리할 수 있게 normal보다 넉넉하게 잡으세요.
 `;
 
   const schema = {

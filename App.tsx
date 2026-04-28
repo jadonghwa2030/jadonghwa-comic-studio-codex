@@ -7,7 +7,7 @@ import { buildKlingI2VPromptPack } from './services/klingPrompt';
 import { getStylePresets, selectStyle } from './services/styleService';
 import { analyzeResearchReport } from './services/researchService';
 import { analyzeStoryScript } from './services/storyAnalysisService';
-import { analyzePaperPdf } from './services/paperService';
+import { analyzePaperPdf, analyzePaperUrl } from './services/paperService';
 import { generateGeminiResearchPack } from './services/geminiResearchService';
 import { getJson } from './services/localApi';
 import { DELIVERY_STYLE_PRESETS, resolveDeliveryStyleSpec } from './services/deliveryStyles';
@@ -15,7 +15,7 @@ import { downloadAsZip, downloadFilesAsZip } from './services/postprocessor';
 import { composeWebtoonEpisodeSegments } from './services/webtoonEpisodeService';
 import { buildCodexHandoffFiles } from './services/codexHandoffService';
 import { CastPreset, CastPresetPayload, loadCastPresets, persistCastPresets } from './services/castPresetService';
-import { analyzeCharacterImage } from './services/characterService';
+import { analyzeCharacterImage, generateCharacterCandidates, generateStyleAlignedCharacterReference, suggestCastFromContent } from './services/characterService';
 import { SavedComicProject, SavedComicProjectSnapshot, loadSavedComicProjects, persistSavedComicProjects } from './services/projectArchiveService';
 import { PageScriptEditorModal } from './components/PageScriptEditorModal';
 import { PageEditActionModal } from './components/PageEditActionModal';
@@ -23,8 +23,8 @@ import { PageStyleEditorModal } from './components/PageStyleEditorModal';
 import { PageNarrativePreview } from './components/PageNarrativePreview';
 import { DevPromptCheckModal } from './components/DevPromptCheckModal';
 import { SeriesPlan, SeriesSpec, PageSpec, AppStatus, GenerationResult, NarrativeRole, StylePreset, LayoutTemplate, LayoutVariety, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ComicMode, ToneMode, ToneLevel, ScriptDetail, PageCountMode, AudienceLevel, DeliveryStyleId, IntroStyle, CharacterSpec, CastRole, CatchphraseFrequency, CharacterConsistencyMode, Language, OutputMode, I2VAspectRatio, PublicationFormat, MangaColorMode, CreationType, StoryInputType, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, WebtoonEpisodeRenderResult, ImageProvider, CodexImageQuality } from './types';
-import { getFormatConfig, getTemplatesForFormat, FORMAT_CONFIGS, isKlingI2V as isKlingI2VFormat, isWebtoon, isManga } from './services/formatConfig';
-import { Loader2, BookOpen, Sparkles, Key, User, ArrowRight, Upload, Palette, CheckCircle2, RotateCcw, Plus, Wand2, LayoutGrid, Layers, Monitor, ChevronRight, ChevronLeft, AlertTriangle, Download, FileText, Settings2, Globe, ExternalLink, Lightbulb, UserCheck, MessageSquareText, Copy, Trash2, Bookmark, FolderOpen, Save } from 'lucide-react';
+import { getFormatConfig, getTemplatesForFormat, FORMAT_CONFIGS, isKlingI2V as isKlingI2VFormat, isWebtoon, isManga, isLearningComic } from './services/formatConfig';
+import { Loader2, BookOpen, Sparkles, Key, User, ArrowRight, Upload, Palette, CheckCircle2, RotateCcw, Plus, Wand2, LayoutGrid, Layers, Monitor, ChevronRight, ChevronLeft, Download, FileText, Settings2, Globe, ExternalLink, Lightbulb, UserCheck, MessageSquareText, Copy, Trash2, Bookmark, FolderOpen, Save, AlertTriangle } from 'lucide-react';
 
 const DEFAULT_MAX_PAGE_COUNT = 12;
 const MAX_SAVED_PROJECTS = 20;
@@ -61,6 +61,7 @@ const IMAGE_SIZE_OPTIONS: ImageSize[] = ["1K", "2K", "4K"];
 const DEFAULT_IMAGE_PROVIDER: ImageProvider = "codex";
 const DEFAULT_CODEX_IMAGE_QUALITY: CodexImageQuality = "medium";
 const DEFAULT_CODEX_IMAGE_MODEL = "gpt-5.5";
+const DEFAULT_LAYOUT_VARIETY: LayoutVariety = "high";
 type OutputReaderMode = "visual" | "visual_plus_script";
 type UiLanguage = "ko" | "en";
 
@@ -91,6 +92,15 @@ interface HealthResponse {
 
 const normalizeCodexImageModel = (model?: string): string =>
   String(model || "").trim() || DEFAULT_CODEX_IMAGE_MODEL;
+
+const deriveTopicFromMaterial = (material: string, fallback: string): string => {
+  const firstLine = material
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return fallback;
+  return firstLine.length > 48 ? `${firstLine.slice(0, 48)}...` : firstLine;
+};
 
 const getCodexImageModelLabel = (model?: string): string => {
   const normalized = normalizeCodexImageModel(model);
@@ -185,34 +195,16 @@ const toUserFacingError = (rawMessage: string, fallback: string, uiLanguage: UiL
   return masked;
 };
 
+type CastSuggestionNotice = {
+  kind: "info" | "success" | "error";
+  message: string;
+  detail?: string;
+};
+
 const deepClone = <T,>(value: T): T => {
   const sc = (globalThis as any)?.structuredClone as ((v: T) => T) | undefined;
   if (typeof sc === "function") return sc(value);
   return JSON.parse(JSON.stringify(value)) as T;
-};
-
-const parseCastInput = (raw: string): { protagonists: string[]; supporting: string[] } => {
-  const input = String(raw ?? "").trim();
-  if (!input) return { protagonists: [], supporting: [] };
-
-  const normalized = input
-    // Convert "A과 B" / "A와 B" / "A랑 B" / "A이랑 B" (including no space before particle) into comma separation
-    .replace(/([^\s,]+?)(?:과|와|랑|이랑)\s+/g, "$1, ")
-    // Word connectors
-    .replace(/\s*(?:그리고|및|and)\s*/gi, ", ")
-    // Symbol connectors
-    .replace(/\s*(?:,|&|\/|\+)\s*/g, ", ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const parts = normalized
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  const protagonists = parts.slice(0, 2);
-  const supporting = parts.slice(2);
-  return { protagonists, supporting };
 };
 
 const createClientId = (): string => {
@@ -287,7 +279,8 @@ const compactStyleForStorage = (
 const compactCastForStorage = (items: CharacterSpec[]): CharacterSpec[] => {
   return items.map((c) => ({
     ...c,
-    reference_images: pickPersistableImageUrls(c.reference_images, MAX_PERSISTABLE_REF_IMAGES_PER_CHARACTER)
+    reference_images: pickPersistableImageUrls(c.reference_images, MAX_PERSISTABLE_REF_IMAGES_PER_CHARACTER),
+    style_aligned_reference_images: pickPersistableImageUrls(c.style_aligned_reference_images, 1)
   }));
 };
 
@@ -355,6 +348,7 @@ const normalizeCastFromSnapshot = (items: CharacterSpec[] | null | undefined): C
       role,
       name: String(c?.name ?? ""),
       appearance: String(c?.appearance ?? ""),
+      analyzed_appearance: String(c?.analyzed_appearance ?? "").trim() || undefined,
       persona: String(c?.persona ?? ""),
       catchphrase: String(c?.catchphrase ?? ""),
       catchphrase_frequency: catchphraseFrequency,
@@ -362,7 +356,9 @@ const normalizeCastFromSnapshot = (items: CharacterSpec[] | null | undefined): C
         ? c.reference_images
           .map((img) => keepPersistableImageUrl(img))
           .filter((img): img is string => Boolean(img))
-        : []
+        : [],
+      style_aligned_reference_images: pickPersistableImageUrls((c as any)?.style_aligned_reference_images, 1),
+      style_aligned_reference_style_key: String((c as any)?.style_aligned_reference_style_key ?? "").trim() || undefined
     };
   });
 
@@ -471,6 +467,31 @@ const buildCastSummaryLine = (c: CharacterSpec): string => {
   if (appearance) bits.push(appearance);
   if (catchphrase) bits.push(`말버릇(${freq}): ${catchphrase}`);
   return bits.join(" / ");
+};
+
+const buildStyleReferenceKey = (style: SeriesSpec["anchors"]["style"]): string =>
+  [
+    "photo-style-transfer-v1",
+    style.preset_id,
+    style.render_mode,
+    style.style_prompt,
+    style.user_style_prompt || ""
+  ].join("|");
+
+const buildGenreEraLockForCharacter = (sourceText: string): string => {
+  if (/(무협|무림|강호|문파|내공|단전|검법|검기|협객|사부|사형|사매|장문인|비급|객잔|도관|도사|마교|정파|사파)/i.test(sourceText)) {
+    return "WUXIA / murim martial arts world. Use traditional East Asian martial arts costume: flowing hanfu/hanbok-inspired robes, martial sect uniform, cloth belt, bracers, sword sheath, topknot or long tied hair. Absolutely avoid modern business suits, blazers, neckties, office-worker styling, sneakers, and contemporary city fashion unless the source explicitly says so.";
+  }
+  if (/(사극|조선|고려|왕궁|궁궐|왕세자|왕비|선비|한복|도포|상투|기생|장군|포졸|관아)/i.test(sourceText)) {
+    return "Historical period drama world. Use traditional period clothing such as hanbok, dopo, official robes, armor, or court clothing. Avoid modern suits, neckties, office outfits, and contemporary fashion.";
+  }
+  if (/(중세|기사|마법사|왕국|공작|후작|백작|검과 마법|드래곤|엘프|마탑|성기사)/i.test(sourceText)) {
+    return "Medieval fantasy world. Use tunics, cloaks, robes, leather gear, armor, or fantasy uniforms. Avoid modern suits, neckties, and office outfits.";
+  }
+  if (/(sf|sci-fi|우주|행성|사이버|로봇|안드로이드|우주선|미래도시)/i.test(sourceText)) {
+    return "Science-fiction world. Use future-facing uniforms, functional jackets, tech gear, or space/cyber silhouettes instead of ordinary modern business clothing.";
+  }
+  return "Follow the era, place, and genre implied by the source material. Do not default to modern business suits or office clothing unless the source clearly requires it.";
 };
 
 const buildResearchPrompt = (topic: string, role: NarrativeRole, questionType: QuestionType): string => {
@@ -1122,6 +1143,24 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
   return { pack: { notes: trimmed } };
 };
 
+const STORY_PUBLICATION_FORMATS: PublicationFormat[] = ["learning_comic", "webtoon", "kling_i2v"];
+const PAPER_PUBLICATION_FORMATS: PublicationFormat[] = ["learning_comic", "webtoon"];
+
+const getSelectablePublicationFormats = (creationType: CreationType): PublicationFormat[] =>
+  creationType === "paper" ? PAPER_PUBLICATION_FORMATS : STORY_PUBLICATION_FORMATS;
+
+const normalizeSelectablePublicationFormat = (
+  format: PublicationFormat,
+  creationType: CreationType
+): PublicationFormat => {
+  if (format === "manga") return "learning_comic";
+  if (creationType === "paper" && format === "kling_i2v") return "webtoon";
+  return format;
+};
+
+const getDefaultNarrativeRole = (creationType: CreationType): NarrativeRole =>
+  creationType === "story" ? "actor" : "narrator";
+
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(getInitialUiLanguage);
@@ -1143,6 +1182,7 @@ const App: React.FC = () => {
   const [storyPageSuggestions, setStoryPageSuggestions] = useState<Record<ScriptDetail, number> | null>(null);
   const [isStoryAnalyzing, setIsStoryAnalyzing] = useState(false);
   const [paperFile, setPaperFile] = useState<File | null>(null);
+  const [paperUrl, setPaperUrl] = useState("");
   const [paperBrief, setPaperBrief] = useState<PaperBrief | null>(null);
   const [paperBriefError, setPaperBriefError] = useState<string | null>(null);
   const [isPaperAnalyzing, setIsPaperAnalyzing] = useState(false);
@@ -1158,7 +1198,7 @@ const App: React.FC = () => {
   const [audienceLevel, setAudienceLevel] = useState<AudienceLevel>("beginner");
   const [deliveryStyleId, setDeliveryStyleId] = useState<DeliveryStyleId>("standard");
   const [deliveryCustomInstruction, setDeliveryCustomInstruction] = useState<string>("");
-  const [layoutVariety, setLayoutVariety] = useState<LayoutVariety>("medium");
+  const [layoutVariety, setLayoutVariety] = useState<LayoutVariety>(DEFAULT_LAYOUT_VARIETY);
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
   const [imageProvider, setImageProvider] = useState<ImageProvider>(DEFAULT_IMAGE_PROVIDER);
   const [codexImageQuality, setCodexImageQuality] = useState<CodexImageQuality>(DEFAULT_CODEX_IMAGE_QUALITY);
@@ -1171,6 +1211,7 @@ const App: React.FC = () => {
   const [researchMode, setResearchMode] = useState<ResearchMode>("auto_digest");
   const [researchReportText, setResearchReportText] = useState("");
   const [researchReportFile, setResearchReportFile] = useState<File | null>(null);
+  const [isManualMaterialOpen, setIsManualMaterialOpen] = useState(false);
   const [researchDigestText, setResearchDigestText] = useState("");
   const [researchDigestSources, setResearchDigestSources] = useState<GroundingSource[]>([]);
   const [researchDigestWarnings, setResearchDigestWarnings] = useState<string[]>([]);
@@ -1183,8 +1224,13 @@ const App: React.FC = () => {
   const [templates, setTemplates] = useState<LayoutTemplate[]>([]);
 
   // Cast
+  const [characterInputMode, setCharacterInputMode] = useState<"suggest" | "manual">("suggest");
   const [cast, setCast] = useState<CharacterSpec[]>(() => [createCharacter("protagonist")]);
-  const [castQuickInput, setCastQuickInput] = useState("");
+  const [isSuggestingCastFromContent, setIsSuggestingCastFromContent] = useState(false);
+  const [castSuggestionNotice, setCastSuggestionNotice] = useState<CastSuggestionNotice | null>(null);
+  const [generatingCharacterImageIds, setGeneratingCharacterImageIds] = useState<Record<string, boolean>>({});
+  const [stylingCharacterImageIds, setStylingCharacterImageIds] = useState<Record<string, boolean>>({});
+  const [characterReferenceErrors, setCharacterReferenceErrors] = useState<Record<string, string>>({});
   const [productReferenceImages, setProductReferenceImages] = useState<string[]>([]);
   const [castPresets, setCastPresets] = useState<CastPreset[]>(() => loadCastPresets());
   const [selectedCastPresetId, setSelectedCastPresetId] = useState<string>("");
@@ -1204,6 +1250,7 @@ const App: React.FC = () => {
 
   // Generation Results
   const [pageResults, setPageResults] = useState<GenerationResult[]>([]);
+  const [pageErrors, setPageErrors] = useState<Record<number, string>>({});
   const [webtoonEpisodeResult, setWebtoonEpisodeResult] = useState<WebtoonEpisodeRenderResult | null>(null);
   const [isBuildingWebtoonEpisode, setIsBuildingWebtoonEpisode] = useState(false);
   const [isExportingCodexHandoff, setIsExportingCodexHandoff] = useState(false);
@@ -1246,13 +1293,13 @@ const App: React.FC = () => {
   const getPreviousStepStatus = (s: AppStatus): AppStatus | null => {
     switch (s) {
       case AppStatus.CHARACTER_SELECT:
-        return AppStatus.TOPIC_INPUT;
+        return AppStatus.STYLE_SELECT;
       case AppStatus.STYLE_SELECT:
-        return AppStatus.CHARACTER_SELECT;
+        return AppStatus.TOPIC_INPUT;
       case AppStatus.PLANNING:
-        return AppStatus.STYLE_SELECT;
+        return AppStatus.CHARACTER_SELECT;
       case AppStatus.PLAN_REVIEW:
-        return AppStatus.STYLE_SELECT;
+        return AppStatus.CHARACTER_SELECT;
       case AppStatus.READY_TO_GENERATE:
       case AppStatus.GENERATING_PANELS:
         return AppStatus.PLAN_REVIEW;
@@ -1392,11 +1439,17 @@ const App: React.FC = () => {
   useEffect(() => {
     if (creationType !== "paper") return;
     setComicMode("learning");
-    if (publicationFormat === "kling_i2v") setPublicationFormat("webtoon");
+    const nextPublicationFormat = normalizeSelectablePublicationFormat(publicationFormat, creationType);
+    if (nextPublicationFormat !== publicationFormat) setPublicationFormat(nextPublicationFormat);
     setLanguage("ko");
-    setLayoutVariety("medium");
+    setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
     setImageSize("2K");
     setToneMode("normal");
+  }, [creationType, publicationFormat]);
+
+  useEffect(() => {
+    const nextPublicationFormat = normalizeSelectablePublicationFormat(publicationFormat, creationType);
+    if (nextPublicationFormat !== publicationFormat) setPublicationFormat(nextPublicationFormat);
   }, [creationType, publicationFormat]);
 
   useEffect(() => {
@@ -1509,6 +1562,7 @@ const App: React.FC = () => {
     setBusyPhase("planning");
     setImageProvider(DEFAULT_IMAGE_PROVIDER);
     setCodexImageQuality(DEFAULT_CODEX_IMAGE_QUALITY);
+    setCharacterInputMode("suggest");
     setNarrativeRole("narrator");
     setCharacterConsistencyMode("loose");
     setUseCrossPageStyleConsistency(true);
@@ -1522,11 +1576,11 @@ const App: React.FC = () => {
     setPageSuggestions(null);
     setIsResearchAnalyzing(false);
     setPaperFile(null);
+    setPaperUrl("");
     setPaperBrief(null);
     setPaperBriefError(null);
     setIsPaperAnalyzing(false);
     setCast([createCharacter("protagonist")]);
-    setCastQuickInput("");
     setProductReferenceImages([]);
     setActiveProjectId("");
     setSelectedPresetId("kwebtoon_clean_pastel");
@@ -1535,6 +1589,7 @@ const App: React.FC = () => {
     setStyleReferenceError(null);
     setSeriesPlan(null);
     setPageResults([]);
+    setPageErrors({});
     setWebtoonEpisodeResult(null);
     setIsBuildingWebtoonEpisode(false);
     setPageRenderedAt({});
@@ -1684,10 +1739,15 @@ const App: React.FC = () => {
       restoredRawPlan?.series_spec?.anchors?.style ||
       null;
     const restoredCast = normalizeCastFromSnapshot(snapshot.cast);
+    const restoredCreationType: CreationType = snapshot.creationType || "educational";
     const restoredComicMode = snapshot.comicMode || "learning";
     const restoredOutputMode: OutputMode = snapshot.outputMode || "comic";
-    const restoredPublicationFormat: PublicationFormat =
+    const restoredRawPublicationFormat: PublicationFormat =
       (snapshot as any).publicationFormat || (restoredOutputMode === "kling_i2v" ? "kling_i2v" : "learning_comic");
+    const restoredPublicationFormat = normalizeSelectablePublicationFormat(
+      restoredRawPublicationFormat,
+      restoredCreationType
+    );
     const restoredMangaColorMode: MangaColorMode = (snapshot as any).mangaColorMode || "bw";
     const restoredI2VAspectRatio: I2VAspectRatio = snapshot.i2vAspectRatio || "16:9";
     const restoredNarrativeRole = snapshot.narrativeRole || "narrator";
@@ -1761,7 +1821,7 @@ const App: React.FC = () => {
     setAudienceLevel(snapshot.audienceLevel || "beginner");
     setDeliveryStyleId(snapshot.deliveryStyleId || "standard");
     setDeliveryCustomInstruction(snapshot.deliveryCustomInstruction || "");
-    setLayoutVariety(snapshot.layoutVariety || "medium");
+    setLayoutVariety(snapshot.layoutVariety || DEFAULT_LAYOUT_VARIETY);
     setImageSize(restoredImageSize);
     setImageProvider(effectiveRestoredImageProvider);
     setCodexImageQuality(restoredCodexImageQuality);
@@ -1771,7 +1831,7 @@ const App: React.FC = () => {
     setNarrativeRole(restoredNarrativeRole);
     setCharacterConsistencyMode(restoredCharacterConsistencyMode);
     setUseCrossPageStyleConsistency(restoredUseCrossPageStyleConsistency);
-    setCreationType(snapshot.creationType || "educational");
+    setCreationType(restoredCreationType);
     setScriptText(snapshot.scriptText || "");
     setStoryInputType(snapshot.storyInputType || "scenario");
     setAgeRating(snapshot.ageRating || "teen");
@@ -1783,6 +1843,7 @@ const App: React.FC = () => {
     setStoryDigestError(null);
     setStoryPageSuggestions(null);
     setPaperFile(null);
+    setPaperUrl("");
     setPaperBrief(snapshot.paperBrief || null);
     setPaperBriefError(null);
     setIsPaperAnalyzing(false);
@@ -1796,7 +1857,6 @@ const App: React.FC = () => {
     setPageSuggestions(null);
     setIsResearchAnalyzing(false);
     setCast(restoredCast);
-    setCastQuickInput("");
     setProductReferenceImages(restoredProductReferenceImages);
     setSelectedPresetId(snapshot.selectedPresetId || "kwebtoon_clean_pastel");
     setSelectedStyleCategory(snapshot.selectedStyleCategory || "Webtoon");
@@ -1805,6 +1865,7 @@ const App: React.FC = () => {
     setStyleReferenceError(null);
     setSeriesPlan(syncedRestoredPlan);
     setPageResults([]);
+    setPageErrors({});
     setWebtoonEpisodeResult(null);
     setIsBuildingWebtoonEpisode(false);
     setPageRenderedAt({});
@@ -2108,7 +2169,12 @@ const App: React.FC = () => {
       setSystemError(null);
       const urls = await Promise.all(toRead.map(readFileAsDataUrl));
       setCast((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, reference_images: [...(c.reference_images || []), ...urls].filter(Boolean) } : c))
+        prev.map((c) => (c.id === id ? {
+          ...c,
+          reference_images: [...(c.reference_images || []), ...urls].filter(Boolean),
+          style_aligned_reference_images: [],
+          style_aligned_reference_style_key: undefined
+        } : c))
       );
 
       // Auto-analyze the first uploaded image to extract structured appearance attributes
@@ -2133,8 +2199,485 @@ const App: React.FC = () => {
       prev.map((c) => {
         if (c.id !== id) return c;
         const remaining = (c.reference_images || []).filter((_: string, i: number) => i !== index);
-        return { ...c, reference_images: remaining, ...(remaining.length === 0 ? { analyzed_appearance: undefined } : {}) };
+        const removed = (c.reference_images || [])[index];
+        const remainingStyleAligned = (c.style_aligned_reference_images || []).filter((url) => url !== removed);
+        return {
+          ...c,
+          reference_images: remaining,
+          style_aligned_reference_images: remaining.length > 0 ? remainingStyleAligned : [],
+          style_aligned_reference_style_key: remaining.length > 0 && remainingStyleAligned.length > 0 ? c.style_aligned_reference_style_key : undefined,
+          ...(remaining.length === 0 ? { analyzed_appearance: undefined } : {})
+        };
       })
+    );
+  };
+
+  const clearStyleAlignedReference = (id: string) => {
+    setCast((prev) =>
+      prev.map((c) => (c.id === id ? {
+        ...c,
+        style_aligned_reference_images: [],
+        style_aligned_reference_style_key: undefined
+      } : c))
+    );
+    setCharacterReferenceErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const buildContentSourceForCast = (): { label: string; text: string } => {
+    if (creationType === "story") {
+      const digest = storyDigestText.trim();
+      const original = scriptText.trim();
+      if (digest && original) {
+        return {
+          label: ui("스토리 분석본+원문", "Story digest + original"),
+          text: [
+            "[STORY DIGEST]",
+            digest,
+            "",
+            "[ORIGINAL STORY EXCERPT]",
+            original.slice(0, 50000)
+          ].join("\n")
+        };
+      }
+      if (digest) return { label: ui("스토리 분석본", "Story digest"), text: digest };
+      return { label: ui("원문 스토리", "Original story"), text: scriptText.trim() };
+    }
+
+    if (creationType === "paper") {
+      if (!paperBrief) return { label: ui("논문 브리프", "Paper brief"), text: "" };
+      return {
+        label: ui("논문 브리프", "Paper brief"),
+        text: [
+          paperBrief.paper_title,
+          paperBrief.one_line_takeaway,
+          paperBrief.motivation_context,
+          ...(paperBrief.opening_candidates || []),
+          ...(paperBrief.paper_story_units || []).map((unit) => `${unit.step}: ${unit.reader_question}`),
+          paperBrief.core_problem,
+          paperBrief.method_summary,
+          paperBrief.result_summary,
+          ...(paperBrief.main_contributions || []),
+          ...(paperBrief.limitations || [])
+        ].filter(Boolean).join("\n")
+      };
+    }
+
+    const digest = researchDigestText.trim();
+    if (digest) return { label: ui("GPT 다이제스트", "GPT digest"), text: digest };
+    const userReport = researchReportText.trim();
+    if (userReport) return { label: ui("업로드 자료", "Uploaded material"), text: userReport };
+    return { label: ui("주제", "Topic"), text: topic.trim() };
+  };
+
+  const resolveCurrentStyle = (): SeriesSpec["anchors"]["style"] => ({
+    ...selectStyle(stylePresets, selectedPresetId, "", { publicationFormat, mangaColorMode }),
+    style_reference_image: styleReferenceImage
+  });
+
+  const getCurrentReferenceStyle = (): SeriesSpec["anchors"]["style"] => finalStyle || resolveCurrentStyle();
+
+  const applyContentCastSuggestions = async () => {
+    if (isSuggestingCastFromContent) return;
+    if (!hasApiKey) {
+      const message = ui("캐릭터 제안에는 로컬 서버와 Codex 로그인이 필요해.", "Character suggestions require the local server and Codex login.");
+      setCastSuggestionNotice({
+        kind: "error",
+        message,
+        detail: ui("`npm run dev`와 `npx @openai/codex login` 상태를 확인해줘.", "Check `npm run dev` and `npx @openai/codex login`.")
+      });
+      setSystemError(message);
+      return;
+    }
+
+    const source = buildContentSourceForCast();
+    if (!source.text || source.text.length < 2) {
+      const message = ui("먼저 주제, 다이제스트, 스토리, 논문 브리프 중 하나가 필요해.", "Add a topic, digest, story, or paper brief first.");
+      setCastSuggestionNotice({ kind: "error", message });
+      setSystemError(message);
+      return;
+    }
+
+    setIsSuggestingCastFromContent(true);
+    setSystemError(null);
+    setCastSuggestionNotice({
+      kind: "info",
+      message: ui("자료를 읽고 캐릭터 후보를 뽑는 중이야.", "Reading the material and drafting character candidates."),
+      detail: ui(`사용 자료: ${source.label}`, `Source: ${source.label}`)
+    });
+    try {
+      const selectedStyle = resolveCurrentStyle();
+      const suggestions = await suggestCastFromContent({
+        source_text: source.text,
+        creation_type: creationType,
+        publication_format: publicationFormat,
+        audience_level: audienceLevel,
+        source_label: source.label,
+        story_genre: storyGenre || undefined,
+        story_input_type: storyInputType,
+        age_rating: ageRating,
+        pacing: pacingPreference,
+        existing_cast: cast,
+        selected_style: {
+          preset_id: selectedStyle.preset_id,
+          preset_label: selectedStyle.preset_label,
+          render_mode: selectedStyle.render_mode,
+          style_prompt: selectedStyle.style_prompt,
+          user_style_prompt: selectedStyle.user_style_prompt
+        }
+      });
+
+      if (suggestions.length === 0) {
+        const message = ui("자료에서 캐릭터 후보를 찾지 못했어.", "Could not find character candidates from the material.");
+        setCastSuggestionNotice({
+          kind: "error",
+          message,
+          detail: ui(
+            `사용 자료: ${source.label}. 자료가 너무 짧거나 인물/역할 단서가 부족하면 빈 결과가 나올 수 있어.`,
+            `Source: ${source.label}. This can happen when the material is too short or has too few character/role cues.`
+          )
+        });
+        setSystemError(message);
+        return;
+      }
+
+      const mapped = suggestions.map((c) => ({
+        ...createCharacter(c.role, c.name),
+        appearance: c.appearance || c.visual_prompt,
+        persona: [c.persona, c.story_function].filter(Boolean).join("\n"),
+        catchphrase: c.catchphrase || "",
+        catchphrase_frequency: "rare" as CatchphraseFrequency,
+        reference_images: []
+      }));
+      const protagonists = mapped.filter((c) => c.role === "protagonist").slice(0, 2);
+      const supporting = mapped.filter((c) => c.role === "supporting");
+      setCast(protagonists.length > 0 ? [...protagonists, ...supporting] : [createCharacter("protagonist"), ...supporting]);
+      setCharacterConsistencyMode("strict");
+      setCastSuggestionNotice({
+        kind: "success",
+        message: ui(`AI 캐릭터 제안 ${mapped.length}명을 적용했어.`, `Applied ${mapped.length} AI character suggestion${mapped.length === 1 ? "" : "s"}.`),
+        detail: ui(`사용 자료: ${source.label}`, `Source: ${source.label}`)
+      });
+      setSystemError(null);
+    } catch (e: any) {
+      const detail = toUserFacingError(
+        e?.message,
+        ui("캐릭터 제안 생성에 실패했어.", "Character suggestion failed."),
+        uiLanguage
+      );
+      setCastSuggestionNotice({
+        kind: "error",
+        message: ui("AI 캐릭터 제안 적용에 실패했어.", "Could not apply AI character suggestions."),
+        detail
+      });
+      setSystemError(detail);
+    } finally {
+      setIsSuggestingCastFromContent(false);
+    }
+  };
+
+  const generateReferenceImageForCharacter = async (id: string) => {
+    if (generatingCharacterImageIds[id]) return;
+    if (!hasApiKey) {
+      setSystemError(ui("AI 캐릭터 이미지 생성에는 로컬 서버와 Codex 로그인이 필요해.", "AI character image generation requires the local server and Codex login."));
+      return;
+    }
+
+    const target = cast.find((c) => c.id === id);
+    if (!target) return;
+    const currentRefs = (target.reference_images || []).filter(Boolean);
+    const styleAlignedRefSet = new Set((target.style_aligned_reference_images || []).filter(Boolean));
+    const sourceIdentityRefs = currentRefs.filter((url) => !styleAlignedRefSet.has(url));
+
+    const selectedStyle = getCurrentReferenceStyle();
+    const selectedStyleKey = buildStyleReferenceKey(selectedStyle);
+    const contentSource = buildContentSourceForCast();
+    const genreEraLock = buildGenreEraLockForCharacter(contentSource.text);
+    const identityProfile = String(target.analyzed_appearance || "").trim();
+    const manualAppearance = String(target.appearance || "").trim();
+    const description = [
+      `Source material type: ${contentSource.label}`,
+      `Creation type: ${creationType}`,
+      `Publication format: ${publicationFormat}`,
+      `Story genre setting: ${storyGenre || "unspecified"}`,
+      `World / era lock: ${genreEraLock}`,
+      `Name/title: ${String(target.name || "").trim() || (target.role === "protagonist" ? "Protagonist" : "Supporting character")}`,
+      `Role: ${target.role}`,
+      `Identity profile from uploaded reference: ${identityProfile || "none"}`,
+      `Manual appearance notes: ${manualAppearance || "none"}`,
+      `Appearance to preserve: ${identityProfile || manualAppearance || "clear readable character design"}`,
+      `Persona: ${String(target.persona || "").trim() || "recurring comic character"}`,
+      `Style direction: ${selectedStyle.style_prompt}`,
+      selectedStyle.user_style_prompt ? `Style addition: ${selectedStyle.user_style_prompt}` : "",
+      "If uploaded identity references are attached, use them only for likeness/identity. Ignore their original photo look, illustration medium, linework, lighting, color grading, texture, and rendering style.",
+      `Source excerpt for genre fidelity: ${contentSource.text.slice(0, 2500)}`,
+      "Do not modernize the character. Do not invent a business suit, blazer, necktie, office-worker outfit, school uniform, or contemporary street fashion unless explicitly required by the source.",
+      "Create a single clean front-facing character reference sheet. Plain background. No speech bubbles. No text labels."
+    ].filter(Boolean).join("\n");
+
+    setGeneratingCharacterImageIds((prev) => ({ ...prev, [id]: true }));
+    setSystemError(null);
+    try {
+      const candidates = await generateCharacterCandidates(description, imageSize, 1, {
+        identityReferenceImages: sourceIdentityRefs.length > 0 ? sourceIdentityRefs : currentRefs
+      });
+      const imageUrl = candidates[0]?.preview_url || "";
+      if (!imageUrl.startsWith("data:")) {
+        throw new Error(ui("캐릭터 이미지를 생성하지 못했어.", "Could not generate the character image."));
+      }
+      const compressed = await compressReferenceDataUrl(imageUrl);
+      setCharacterReferenceErrors((prev) => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setCast((prev) =>
+        prev.map((c) => (c.id === id ? {
+          ...c,
+          reference_images: [
+            ...(c.reference_images || []).filter(Boolean).slice(0, MAX_REF_IMAGES_PER_CHARACTER - 1),
+            compressed
+          ],
+          style_aligned_reference_images: [compressed],
+          style_aligned_reference_style_key: selectedStyleKey
+        } : c))
+      );
+      setCharacterConsistencyMode("strict");
+    } catch (e: any) {
+      setSystemError(e?.message || ui("AI 캐릭터 이미지 생성에 실패했어.", "AI character image generation failed."));
+    } finally {
+      setGeneratingCharacterImageIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const styleReferenceImageForCharacter = async (id: string) => {
+    if (stylingCharacterImageIds[id]) return;
+    if (!hasApiKey) {
+      const message = ui("그림체 변환에는 로컬 서버와 Codex 로그인이 필요해.", "Style conversion requires the local server and Codex login.");
+      setCharacterReferenceErrors((prev) => ({ ...prev, [id]: message }));
+      setSystemError(message);
+      return;
+    }
+
+    const target = cast.find((c) => c.id === id);
+    if (!target) return;
+    const refs = (target.reference_images || []).filter(Boolean);
+    if (refs.length === 0) {
+      const message = ui("먼저 캐릭터 레퍼런스 이미지를 추가해줘.", "Add a character reference image first.");
+      setCharacterReferenceErrors((prev) => ({ ...prev, [id]: message }));
+      return;
+    }
+
+    const style = getCurrentReferenceStyle();
+    const styleKey = buildStyleReferenceKey(style);
+    setStylingCharacterImageIds((prev) => ({ ...prev, [id]: true }));
+    setCharacterReferenceErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSystemError(null);
+
+    try {
+      const generated = await generateStyleAlignedCharacterReference({
+        characterName: target.name,
+        identityProfile: target.analyzed_appearance,
+        manualAppearance: target.appearance,
+        stylePrompt: style.style_prompt,
+        userStylePrompt: style.user_style_prompt,
+        imageSize,
+        identityReferenceImages: refs
+      });
+      if (!generated) {
+        throw new Error(ui("현재 그림체 변환 결과가 비어 있어.", "The style conversion returned no image."));
+      }
+
+      const compressed = await compressReferenceDataUrl(generated);
+      setCast((prev) =>
+        prev.map((c) => (c.id === id ? {
+          ...c,
+          style_aligned_reference_images: [compressed],
+          style_aligned_reference_style_key: styleKey
+        } : c))
+      );
+      setCharacterConsistencyMode("strict");
+    } catch (e: any) {
+      const message = e?.message || ui("현재 그림체 변환에 실패했어.", "Style conversion failed.");
+      setCharacterReferenceErrors((prev) => ({ ...prev, [id]: message }));
+    } finally {
+      setStylingCharacterImageIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const renderCharacterReferenceControls = (
+    c: CharacterSpec,
+    options: {
+      inputId: string;
+      displayName: string;
+      altFallback: string;
+      panelClassName: string;
+      titleClassName: string;
+      countClassName: string;
+      uploadDisabled?: boolean;
+      compact?: boolean;
+    }
+  ) => {
+    const refs = (c.reference_images || []).filter(Boolean);
+    const currentStyleKey = buildStyleReferenceKey(getCurrentReferenceStyle());
+    const currentStyleAlignedRefs = c.style_aligned_reference_style_key === currentStyleKey
+      ? (c.style_aligned_reference_images || []).filter(Boolean)
+      : [];
+    const refSet = new Set(refs);
+    const detachedStyleAlignedRefs = currentStyleAlignedRefs.filter((url) => !refSet.has(url));
+    const hasCurrentStyleAlignedRef = currentStyleAlignedRefs.length > 0;
+    const hasAnyStyleAlignedRef = (c.style_aligned_reference_images || []).filter(Boolean).length > 0;
+    const isGenerating = Boolean(generatingCharacterImageIds[c.id]);
+    const isStyling = Boolean(stylingCharacterImageIds[c.id]);
+    const uploadDisabled = Boolean(options.uploadDisabled);
+    const buttonTextSize = options.compact ? "text-[10px]" : "text-[10px] md:text-xs";
+    const iconSize = options.compact ? 12 : 14;
+    const thumbnailIconSize = options.compact ? 10 : 12;
+
+    return (
+      <div className={options.panelClassName}>
+        <div className="flex items-center justify-between gap-3">
+          <p className={options.titleClassName}>{ui("레퍼런스 사진", "Reference Photos")}</p>
+          <p className={options.countClassName}>{refs.length}/{MAX_REF_IMAGES_PER_CHARACTER}</p>
+        </div>
+
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          id={options.inputId}
+          className="hidden"
+          disabled={uploadDisabled}
+          onChange={(e) => {
+            void addReferenceImages(c.id, e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <label
+            htmlFor={options.inputId}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-2 font-black border-2 border-black ${buttonTextSize} ${uploadDisabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-black text-white cursor-pointer hover:bg-blue-600 transition-colors"}`}
+          >
+            <Upload size={iconSize} /> {ui("사진 추가", "Add Photos")}
+          </label>
+          <button
+            type="button"
+            onClick={() => void generateReferenceImageForCharacter(c.id)}
+            disabled={isGenerating || uploadDisabled}
+            className={`inline-flex items-center justify-center gap-2 border-2 border-black bg-white px-4 py-2 font-black hover:bg-yellow-50 transition-colors ${buttonTextSize} disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isGenerating ? <Loader2 size={iconSize} className="animate-spin" /> : <Wand2 size={iconSize} />}
+            {ui("AI 이미지", "AI Image")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void styleReferenceImageForCharacter(c.id)}
+            disabled={refs.length === 0 || isStyling || uploadDisabled}
+            className={`inline-flex items-center justify-center gap-2 border-2 border-black bg-white px-4 py-2 font-black hover:bg-blue-50 transition-colors ${buttonTextSize} disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={ui("업로드한 레퍼런스를 현재 선택한 그림체로 변환", "Convert uploaded references to the selected style")}
+          >
+            {isStyling ? <Loader2 size={iconSize} className="animate-spin" /> : <Palette size={iconSize} />}
+            {hasCurrentStyleAlignedRef
+              ? ui("현재 그림체 다시", "Restyle")
+              : hasAnyStyleAlignedRef
+                ? ui("현재 그림체로 다시", "Restyle Current")
+                : ui("현재 그림체로 다듬기", "Style Match")}
+          </button>
+        </div>
+
+        {hasCurrentStyleAlignedRef ? (
+          <p className="mt-2 text-[10px] font-black text-blue-700">{ui("현재 그림체 변환본을 최종 생성에 우선 사용", "Current-style reference is prioritized for final generation")}</p>
+        ) : null}
+        {characterReferenceErrors[c.id] ? (
+          <p className="mt-2 text-[10px] font-bold text-red-600">{characterReferenceErrors[c.id]}</p>
+        ) : null}
+
+        {refs.length > 0 ? (
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {refs.map((url, idx) => {
+              const isCurrentStyleRef = currentStyleAlignedRefs.includes(url);
+              return (
+                <div key={`${c.id}_${options.inputId}_${idx}`} className="relative border-2 border-black bg-white overflow-hidden aspect-square">
+                  <img src={url} alt={`${options.displayName || options.altFallback} ref ${idx + 1}`} className="w-full h-full object-cover" />
+                  {isCurrentStyleRef ? (
+                    <span className="absolute bottom-1 left-1 right-1 bg-blue-600 text-white text-[8px] font-black text-center px-1 py-0.5">
+                      {ui("현재 그림체", "Styled")}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => downloadReferenceImage(url, c, idx)}
+                    className="absolute top-1 left-1 bg-white border-2 border-black p-1 hover:bg-blue-50"
+                    title={ui("다운로드", "Download")}
+                  >
+                    <Download size={thumbnailIconSize} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeReferenceImage(c.id, idx)}
+                    disabled={uploadDisabled}
+                    className={`absolute top-1 right-1 border-2 border-black p-1 ${uploadDisabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"}`}
+                    title={ui("삭제", "Remove")}
+                  >
+                    <Trash2 size={thumbnailIconSize} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {detachedStyleAlignedRefs.length > 0 ? (
+          <div className="mt-3">
+            <p className="mb-2 text-[10px] font-black text-blue-700">{ui("변환된 레퍼런스", "Styled Reference")}</p>
+            <div className="grid grid-cols-4 gap-2">
+              {detachedStyleAlignedRefs.map((url, idx) => (
+                <div key={`${c.id}_${options.inputId}_styled_${idx}`} className="relative border-2 border-blue-600 bg-white overflow-hidden aspect-square">
+                  <img src={url} alt={`${options.displayName || options.altFallback} styled reference ${idx + 1}`} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-1 left-1 right-1 bg-blue-600 text-white text-[8px] font-black text-center px-1 py-0.5">
+                    {ui("현재 그림체", "Styled")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => downloadReferenceImage(url, c, idx)}
+                    className="absolute top-1 left-1 bg-white border-2 border-black p-1 hover:bg-blue-50"
+                    title={ui("다운로드", "Download")}
+                  >
+                    <Download size={thumbnailIconSize} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => clearStyleAlignedReference(c.id)}
+                    disabled={uploadDisabled}
+                    className={`absolute top-1 right-1 border-2 border-black p-1 ${uploadDisabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"}`}
+                    title={ui("삭제", "Remove")}
+                  >
+                    <Trash2 size={thumbnailIconSize} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     );
   };
 
@@ -2183,6 +2726,7 @@ const App: React.FC = () => {
       const next = [nextPreset, ...withoutExisting].slice(0, 30);
       setSelectedCastPresetId(nextPreset.id);
       setSystemError(null);
+      setCastSuggestionNotice(null);
       return next;
     });
   };
@@ -2218,6 +2762,7 @@ const App: React.FC = () => {
     const nextCast = protagonists.length > 0 ? [...protagonists, ...supporting] : [createCharacter("protagonist"), ...supporting];
     setCast(nextCast);
     setSystemError(null);
+    setCastSuggestionNotice(null);
   };
 
   const applyCastPresetToSection = (presetId: string, role: CastRole) => {
@@ -2244,23 +2789,29 @@ const App: React.FC = () => {
     if (role === "protagonist") {
       const nextProtagonists = mapped.filter((c) => c.role === "protagonist").slice(0, 2);
       if (nextProtagonists.length === 0) {
-        setSystemError(ui("이 프리셋에는 주연 캐릭터가 없어.", "This preset has no lead character."));
+        const message = ui("이 프리셋에는 주연 캐릭터가 없어.", "This preset has no lead character.");
+        setSystemError(message);
+        setCastSuggestionNotice({ kind: "error", message });
         return;
       }
       const existingSupporting = cast.filter((c) => c.role === "supporting");
       setCast([...nextProtagonists, ...existingSupporting]);
       setSystemError(null);
+      setCastSuggestionNotice(null);
       return;
     }
 
     const existingProtagonists = cast.filter((c) => c.role === "protagonist").slice(0, 2);
     if (existingProtagonists.length === 0) {
-      setSystemError(ui("주연(주인공)은 최소 1명은 있어야 해.", "You need at least 1 lead character."));
+      const message = ui("주연(주인공)은 최소 1명은 있어야 해.", "You need at least 1 lead character.");
+      setSystemError(message);
+      setCastSuggestionNotice({ kind: "error", message });
       return;
     }
     const nextSupporting = mapped.filter((c) => c.role === "supporting");
     setCast([...existingProtagonists, ...nextSupporting]);
     setSystemError(null);
+    setCastSuggestionNotice(null);
   };
 
   const deleteCastPreset = (presetId: string) => {
@@ -2303,7 +2854,13 @@ const App: React.FC = () => {
 
   const handleAnalyzeResearch = async () => {
     if (isResearchAnalyzing) return;
-    if (!topic.trim()) return;
+    const materialText = researchReportText.trim();
+    const effectiveTopic = topic.trim() || deriveTopicFromMaterial(
+      materialText,
+      researchReportFile?.name || ui("업로드 자료", "Uploaded material")
+    );
+    if (!effectiveTopic.trim()) return;
+    if (!topic.trim()) setTopic(effectiveTopic);
 
     setIsResearchAnalyzing(true);
     setResearchDigestError(null);
@@ -2314,7 +2871,7 @@ const App: React.FC = () => {
       const hasUserMaterial = Boolean(researchReportText.trim() || researchReportFile);
       const result = hasUserMaterial
         ? await analyzeResearchReport({
-          topic,
+          topic: effectiveTopic,
           question_type: questionType,
           comic_mode: comicMode,
           character_role: narrativeRole,
@@ -2323,7 +2880,7 @@ const App: React.FC = () => {
           file: researchReportFile || undefined
         })
         : await generateGeminiResearchPack({
-          topic,
+          topic: effectiveTopic,
           question_type: questionType,
           comic_mode: comicMode,
           character_role: narrativeRole,
@@ -2398,8 +2955,50 @@ const App: React.FC = () => {
     }
   };
 
+  const runPaperUrlAnalysis = async () => {
+    if (isPaperAnalyzing) return;
+    const rawUrl = paperUrl.trim();
+    if (!rawUrl) {
+      setPaperBriefError(ui("논문 URL을 먼저 입력해줘.", "Enter a paper URL first."));
+      return;
+    }
+    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    try {
+      new URL(url);
+    } catch {
+      setPaperBriefError(ui("URL 형식이 올바르지 않아.", "The URL format looks invalid."));
+      return;
+    }
+
+    setIsPaperAnalyzing(true);
+    setPaperBriefError(null);
+    setPaperBrief(null);
+    setPaperFile(null);
+    setPaperUrl(url);
+
+    try {
+      const result = await analyzePaperUrl({
+        url,
+        audience_level: audienceLevel,
+        detail_level: scriptDetail,
+        publication_format: publicationFormat
+      });
+      setPaperBrief(result);
+      setTopic(result.paper_title || "");
+      if (pageCountMode === "auto") {
+        const suggested = result.page_suggestions?.[scriptDetail];
+        if (typeof suggested === "number") setTargetPageCount(clampPageCount(suggested));
+      }
+    } catch (e: any) {
+      setPaperBriefError(e?.message || ui("논문 URL 조사에 실패했어.", "Paper URL research failed."));
+    } finally {
+      setIsPaperAnalyzing(false);
+    }
+  };
+
   const handlePaperFileChange = async (file: File | null) => {
     setPaperFile(file);
+    if (file) setPaperUrl("");
     setPaperBrief(null);
     setPaperBriefError(null);
     if (!file) return;
@@ -2409,12 +3008,11 @@ const App: React.FC = () => {
   const handleGeneratePlan = async (styleOverride?: SeriesSpec["anchors"]["style"] | null) => {
     if (!hasApiKey) {
       setSystemError(ui("플랜/스크립트 생성에는 로컬 서버와 Codex 로그인이 필요해. `npm run dev`와 `npx @openai/codex login`을 확인해줘.", "Plan/script generation requires the local server and Codex login. Check `npm run dev` and `npx @openai/codex login`."));
-      setStatus(AppStatus.STYLE_SELECT);
+      setStatus(AppStatus.CHARACTER_SELECT);
       return;
     }
     const effectiveStyle = styleOverride || finalStyle || {
-      ...selectStyle(stylePresets, selectedPresetId, "", { publicationFormat, mangaColorMode }),
-      style_reference_image: styleReferenceImage
+      ...resolveCurrentStyle()
     };
     if (!effectiveStyle) return;
     if (creationType === "story") {
@@ -2422,7 +3020,7 @@ const App: React.FC = () => {
     } else if (creationType === "paper") {
       if (!paperBrief) return;
     } else {
-      if (!topic) return;
+      if (!topic.trim()) return;
     }
     generationRunIdRef.current += 1;
     const runId = generationRunIdRef.current;
@@ -2433,6 +3031,7 @@ const App: React.FC = () => {
       setRegenerateCursor(1);
       setIsProcessingPageIndex(null);
       setPageResults([]);
+      setPageErrors({});
       setWebtoonEpisodeResult(null);
       setIsBuildingWebtoonEpisode(false);
       setPageRenderedAt({});
@@ -2459,7 +3058,7 @@ const App: React.FC = () => {
 
       const primary = protagonists[0];
       const primaryAppearance =
-        String(primary.appearance || "").trim() || String(primary.name || "").trim() || "A friendly guide character";
+        String(primary.analyzed_appearance || primary.appearance || "").trim() || String(primary.name || "").trim() || "A friendly guide character";
       const primaryRefs = Array.isArray(primary.reference_images) ? primary.reference_images.filter(Boolean) : [];
       const supportingSummary = cast
         .filter((c) => c.role === "supporting")
@@ -2478,6 +3077,9 @@ const App: React.FC = () => {
         templatesForPlan = i2vTemplate ? [i2vTemplate] : [];
       } else {
         templatesForPlan = getTemplatesForFormat(publicationFormat, templates);
+        if (publicationFormat === "learning_comic" && layoutVariety !== "high") {
+          templatesForPlan = templatesForPlan.filter((t) => t.panels.length === 4);
+        }
         if (templatesForPlan.length === 0) {
           // Fallback for formats without dedicated templates yet
           templatesForPlan = templates.filter((t) => t.panels.length === 4);
@@ -2486,7 +3088,7 @@ const App: React.FC = () => {
 
       if (templatesForPlan.length === 0) {
         setSystemError(ui("레이아웃 템플릿을 찾을 수 없어. 새로고침 후 다시 시도해줘.", "Could not find layout templates. Refresh and try again."));
-        setStatus(AppStatus.STYLE_SELECT);
+        setStatus(AppStatus.CHARACTER_SELECT);
         return;
       }
 
@@ -2542,6 +3144,8 @@ const App: React.FC = () => {
           publication_format: publicationFormat,
           manga_color_mode: mangaColorMode,
           i2v_aspect_ratio: i2vAspectRatio,
+          tone_mode: toneMode,
+          tone_level: toneLevel,
           character_consistency_mode: characterConsistencyMode,
           character_description: primaryAppearance,
           character_role: narrativeRole,
@@ -2555,7 +3159,7 @@ const App: React.FC = () => {
       } else {
         let effectivePageCount = targetPageCount;
         if (!researchDigestText.trim()) {
-          setSystemError(ui("먼저 Codex Digest를 실행해 Research Pack을 만들어줘.", "Run Codex Digest first to create a Research Pack."));
+          setSystemError(ui("먼저 자료를 AI로 핵심 정리해줘.", "Summarize the material with AI first."));
           setStatus(AppStatus.TOPIC_INPUT);
           return;
         }
@@ -2648,6 +3252,7 @@ const App: React.FC = () => {
     setRegenerateCursor(1);
     setIsProcessingPageIndex(null);
     setPageResults([]);
+    setPageErrors({});
     setWebtoonEpisodeResult(null);
     setIsBuildingWebtoonEpisode(false);
     setPageRenderedAt({});
@@ -2803,7 +3408,7 @@ const App: React.FC = () => {
     const page = overridePage || seriesPlan.pages.find((p) => p.page.index === pageIndex);
     if (!page) return false;
     const styleForThisCall = overrideStyle || pageStyleOverrides[pageIndex] || null;
-    const resolvedSeriesSpec: SeriesSpec = styleForThisCall
+    let resolvedSeriesSpec: SeriesSpec = styleForThisCall
       ? {
         ...seriesPlan.series_spec,
         anchors: { ...seriesPlan.series_spec.anchors, style: styleForThisCall }
@@ -2824,6 +3429,12 @@ const App: React.FC = () => {
     isGeneratingPageRef.current = true;
     setStatus(AppStatus.GENERATING_PANELS);
     setIsProcessingPageIndex(pageIndex);
+    setPageErrors((prev) => {
+      if (!prev[pageIndex]) return prev;
+      const next = { ...prev };
+      delete next[pageIndex];
+      return next;
+    });
 
     try {
       const compressedStyleConsistencyImage = styleConsistencyImage
@@ -2845,13 +3456,22 @@ const App: React.FC = () => {
         ...prev,
         [pageIndex]: buildImageEngineKey(imageProvider, codexImageQuality)
       }));
+      setSystemError(null);
       setStatus(AppStatus.READY_TO_GENERATE);
       return true;
     } catch (e) {
       console.error(e);
       if (generationRunIdRef.current !== runId) return false;
-      setSystemError(toUserFacingError((e as any)?.message, isKlingI2VFormat(publicationFormat) ? ui("프레임 생성에 실패했어.", "Frame generation failed.") : ui("페이지 생성에 실패했어.", "Page generation failed."), uiLanguage));
-      setStatus(AppStatus.ERROR);
+      const message = toUserFacingError(
+        (e as any)?.message,
+        isKlingI2VFormat(publicationFormat)
+          ? ui("프레임 생성에 실패했어.", "Frame generation failed.")
+          : ui("페이지 생성에 실패했어.", "Page generation failed."),
+        uiLanguage
+      );
+      setPageErrors((prev) => ({ ...prev, [pageIndex]: message }));
+      setSystemError(message);
+      setStatus(AppStatus.READY_TO_GENERATE);
       return false;
     } finally {
       isGeneratingPageRef.current = false;
@@ -2948,6 +3568,18 @@ const App: React.FC = () => {
     link.click();
   };
 
+  const downloadReferenceImage = (url: string, character: CharacterSpec, index: number) => {
+    const safeName = String(character.name || (character.role === "protagonist" ? "protagonist" : "supporting"))
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, "_")
+      .slice(0, 40) || "character";
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `toon_for_codex_${safeName}_ref_${index + 1}.png`;
+    link.click();
+  };
+
   const downloadAllPagesAsZip = async () => {
     if (!seriesPlan) return;
     if (isDownloadingZip) return;
@@ -3026,6 +3658,7 @@ const App: React.FC = () => {
   const isPureCinematicSelected = isPureCinematicMode(comicMode);
   const isAnyCinematicSelected = isAnyCinematicMode(comicMode);
   const isI2VSelected = isKlingI2VFormat(publicationFormat);
+  const isLearningComicSelected = isLearningComic(publicationFormat);
   const isWebtoonSelected = isWebtoon(publicationFormat);
   const currentFormatConfig = getFormatConfig(publicationFormat);
   const unitLabel = uiLanguage === "ko" ? currentFormatConfig.unitLabelKo : currentFormatConfig.unitLabel;
@@ -3049,6 +3682,11 @@ const App: React.FC = () => {
   const generatedProgressLabel = seriesPlan
     ? `${pageResults.length}/${seriesPlan.pages.length} ${isI2VSelected ? ui("프레임", "frames") : ui("페이지", "pages")}`
     : "";
+  const pageErrorEntries = Object.entries(pageErrors)
+    .map(([pageIndex, message]) => ({ pageIndex: Number(pageIndex), message }))
+    .filter((entry) => Number.isFinite(entry.pageIndex) && Boolean(entry.message))
+    .sort((a, b) => a.pageIndex - b.pageIndex);
+  const failedUnitCount = pageErrorEntries.length;
   const pageResultsMap = new Map<number, GenerationResult>(pageResults.map((result) => [result.page_index, result]));
   const rawWebtoonFallbackSegments = (seriesPlan?.pages || [])
     .filter((page) => pageResultsMap.has(page.page.index))
@@ -3059,13 +3697,14 @@ const App: React.FC = () => {
     .filter((segment) => Boolean(segment.url));
   const nextPendingPage = seriesPlan?.pages.find((page) => !pageResultsMap.has(page.page.index)) || null;
   const generatedPageCount = pageResults.length;
+  const isTopicRequiredMissing = creationType === "educational" && !topic.trim();
   const canProceedMissionSetup =
     creationType === "story"
       ? scriptText.trim().length >= 50 && !isStoryAnalyzing
       : creationType === "paper"
         ? Boolean(paperBrief) && !isPaperAnalyzing
         : (
-          Boolean(topic) &&
+          Boolean(topic.trim()) &&
           !isResearchAnalyzing &&
           Boolean(researchDigestText.trim())
         );
@@ -3077,6 +3716,7 @@ const App: React.FC = () => {
     canProceedCharacterSetup &&
     stylePresets.length > 0 &&
     hasApiKey;
+  const selectedStylePresetForDisplay = stylePresets.find((p) => p.id === selectedPresetId);
   const paperTrackLabel =
     paperBrief?.paper_mode_track === "methodology_focus" ? "방법론 중심" : "대중형 요약";
 
@@ -3168,9 +3808,6 @@ const App: React.FC = () => {
             <div>
               <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-2">
                 <Bookmark size={14} /> {ui("프로젝트 보관함", "Project Library")}
-              </p>
-              <p className="text-[10px] font-bold text-slate-500 mt-1">
-                {ui("최종 생성 단계에서 자동 저장돼. 저장 항목: 플랜/대본/스타일/캐스트 (생성 페이지 이미지는 제외)", "Automatically saved at the final generation step. Saves plans, scripts, styles, and cast. Generated page images are excluded.")}
               </p>
               {activeProjectId ? (
                 <p className="text-[10px] font-black text-slate-700 mt-2">
@@ -3292,99 +3929,153 @@ const App: React.FC = () => {
             <div className="mb-3">
               <PreviousStepButton />
             </div>
-            <h2 className="text-2xl md:text-3xl font-black mb-6 md:mb-8 border-l-8 border-blue-600 pl-4 uppercase">{ui("02. 캐릭터 설정", "02. Setup Character")}</h2>
-
-            <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-              <p className="text-sm font-black text-gray-700 uppercase mb-4 flex items-center gap-2"><UserCheck size={18} className="text-blue-600" /> {ui("주인공 역할", "Protagonist Role")}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setNarrativeRole("narrator")}
-                  className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "narrator" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
-                >
-                  <div className="bg-blue-600 text-white p-2 rounded-lg"><MessageSquareText size={20} /></div>
-                  <div className="text-left">
-                    <p className="font-black text-sm uppercase">{ui("설명하는 가이드", "Guide / Narrator")}</p>
-                    <p className="text-[10px] font-bold text-gray-500 mt-1">{ui("주인공이 제3자 입장에서 지식을 설명해.", "The protagonist explains from a guide or observer position.")}</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setNarrativeRole("actor")}
-                  className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "actor" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
-                >
-                  <div className="bg-black text-white p-2 rounded-lg"><User size={20} /></div>
-                  <div className="text-left">
-                    <p className="font-black text-sm uppercase">{ui("직접 연기하는 배우", "Actor / Performer")}</p>
-                    <p className="text-[10px] font-bold text-gray-500 mt-1">{ui("주인공이 직접 사건 안에서 행동하며 설명해.", "The protagonist acts inside the situation and explains through action.")}</p>
-                  </div>
-                </button>
-              </div>
+            <h2 className="text-2xl md:text-3xl font-black mb-6 md:mb-8 border-l-8 border-blue-600 pl-4 uppercase">{ui("03. 캐릭터 설정", "03. Setup Character")}</h2>
+            <div className="mb-8 border-2 border-blue-600 bg-blue-50 px-4 py-3 text-[10px] md:text-xs font-black text-blue-900 uppercase flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <span>{ui("선택된 그림체", "Selected Style")}</span>
+              <span>{selectedStylePresetForDisplay?.label || selectedPresetId}</span>
             </div>
 
             <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
               <p className="text-sm font-black text-gray-700 uppercase mb-4 flex items-center gap-2">
-                <Layers size={18} className="text-blue-600" /> {ui("캐릭터 일관성", "Character Consistency")}
+                <UserCheck size={18} className="text-blue-600" /> {ui("캐릭터 만드는 방법", "Character Setup Method")}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   type="button"
-                  onClick={() => setCharacterConsistencyMode("loose")}
-                  className={`flex items-start gap-4 p-4 border-4 transition-all ${characterConsistencyMode === "loose" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  onClick={() => setCharacterInputMode("suggest")}
+                  className={`flex items-start gap-4 p-4 border-4 transition-all ${characterInputMode === "suggest" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
                 >
-                  <div className="bg-white border-2 border-black p-2 rounded-lg">
-                    <p className="text-[10px] font-black uppercase">LOOSE</p>
-                  </div>
+                  <div className="bg-blue-600 text-white p-2 rounded-lg"><Wand2 size={20} /></div>
                   <div className="text-left">
-                    <p className="font-black text-sm uppercase">{ui("느슨", "Loose")}</p>
-                    <p className="text-[10px] font-bold text-gray-500 mt-1">{ui("기본 수준의 외모/복장 일관성을 유지해.", "Keeps a basic level of appearance and outfit consistency.")}</p>
+                    <p className="font-black text-sm uppercase">{ui("캐릭터 제안 받기", "Suggest Characters")}</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500 leading-relaxed">
+                      {ui("자료에서 실제 등장인물 후보를 먼저 뽑아.", "Draft character candidates from your material first.")}
+                    </p>
                   </div>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCharacterConsistencyMode("strict")}
-                  className={`flex items-start gap-4 p-4 border-4 transition-all ${characterConsistencyMode === "strict" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  onClick={() => setCharacterInputMode("manual")}
+                  className={`flex items-start gap-4 p-4 border-4 transition-all ${characterInputMode === "manual" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
                 >
-                  <div className="bg-black text-white p-2 rounded-lg">
-                    <p className="text-[10px] font-black uppercase">STRICT</p>
-                  </div>
+                  <div className="bg-black text-white p-2 rounded-lg"><User size={20} /></div>
                   <div className="text-left">
-                    <p className="font-black text-sm uppercase">{ui("엄격", "Strict")}</p>
-                    <p className="text-[10px] font-bold text-gray-500 mt-1">{ui("얼굴/헤어/체형/의상 변형을 강하게 줄이고 레퍼런스를 우선해.", "Strongly reduces changes to face, hair, body, and outfit while prioritizing references.")}</p>
+                    <p className="font-black text-sm uppercase">{ui("직접 캐릭터 채우기", "Fill Characters Manually")}</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500 leading-relaxed">
+                      {ui("이름을 빠르게 넣거나 아래 카드에서 직접 작성해.", "Add names quickly or fill the cards below.")}
+                    </p>
                   </div>
                 </button>
               </div>
             </div>
 
-            <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-              <p className="text-sm font-black text-gray-700 uppercase mb-3 flex items-center gap-2">
-                <Lightbulb size={18} className="text-blue-600" /> {ui("캐스트 빠른 입력(선택)", "Quick Cast Input (Optional)")}
-              </p>
-              <input
-                type="text"
-                value={castQuickInput}
-                onChange={(e) => setCastQuickInput(e.target.value)}
-                placeholder={ui("예: 세종대왕, 장영실, 신하들 (앞 2명=주연, 나머지=조연)", "Example: King Sejong, Jang Yeong-sil, officials (first 2 = leads, rest = supporting)")}
-                className="w-full border-4 border-black p-4 font-bold mb-3 outline-none focus:bg-white"
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-bold text-slate-600">
-                  {ui("팁: 여기서는 이름/호칭만 추가돼. 외형/페르소나/사진은 아래 카드에서 채워줘.", "Tip: This only adds names or titles. Fill appearance, persona, and photos in the cards below.")}
-                </p>
+            {characterInputMode === "suggest" && (
+            <div className="mb-8 p-6 bg-yellow-50 border-2 border-black">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-black text-gray-800 uppercase mb-2 flex items-center gap-2">
+                    <Wand2 size={18} className="text-yellow-600" /> {ui("자료에서 캐릭터 제안", "Suggest Characters from Material")}
+                  </p>
+                  <p className="text-[10px] md:text-xs font-bold text-slate-600 leading-relaxed">
+                    {ui("원문 안의 행동, 관계, 호칭 단서로만 주연과 반복 출연자를 채워.", "Uses only source cues such as actions, relationships, and titles.")}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const parsed = parseCastInput(castQuickInput);
-                    if (parsed.protagonists.length === 0 && parsed.supporting.length === 0) return;
-                    setSystemError(null);
-                    setCast(() => {
-                      const protos = parsed.protagonists.map((n) => createCharacter("protagonist", n));
-                      const supps = parsed.supporting.map((n) => createCharacter("supporting", n));
-                      return protos.length > 0 ? [...protos, ...supps] : [createCharacter("protagonist"), ...supps];
-                    });
-                  }}
-                  className="border-2 border-black bg-white px-4 py-2 font-black hover:bg-slate-100 text-[10px] md:text-xs whitespace-nowrap"
+                  onClick={() => void applyContentCastSuggestions()}
+                  disabled={isSuggestingCastFromContent || isProcessing}
+                  className="bg-black text-white px-5 py-3 font-black flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors text-[10px] md:text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {ui("적용", "Apply")}
+                  {isSuggestingCastFromContent ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                  {isSuggestingCastFromContent ? ui("제안 중", "Suggesting") : ui("AI 제안 받기", "Get AI Suggestions")}
                 </button>
+              </div>
+              {castSuggestionNotice && (
+                <div
+                  className={`mt-5 border-2 p-3 text-[10px] md:text-xs font-bold whitespace-pre-wrap ${
+                    castSuggestionNotice.kind === "error"
+                      ? "border-red-500 bg-red-50 text-red-900"
+                      : castSuggestionNotice.kind === "success"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+                        : "border-yellow-600 bg-white text-slate-800"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {castSuggestionNotice.kind === "error" ? <AlertTriangle size={15} className="mt-0.5 shrink-0" /> : castSuggestionNotice.kind === "success" ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" /> : <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin" />}
+                    <div className="min-w-0">
+                      <p className="font-black">{castSuggestionNotice.message}</p>
+                      {castSuggestionNotice.detail && (
+                        <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed">{castSuggestionNotice.detail}</pre>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
+
+            <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 border-2 border-black">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+                  <p className="text-sm font-black text-gray-700 uppercase flex items-center gap-2"><UserCheck size={18} className="text-blue-600" /> {ui("주인공 역할", "Protagonist Role")}</p>
+                  <span className="w-fit border-2 border-blue-600 bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700 uppercase">
+                    {ui("현재 모드 기본값", "Mode Default")}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNarrativeRole("narrator")}
+                    className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "narrator" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  >
+                    <div className="bg-blue-600 text-white p-2 rounded-lg"><MessageSquareText size={20} /></div>
+                    <div className="text-left">
+                      <p className="font-black text-sm uppercase">{ui("설명하는 가이드", "Guide / Narrator")}</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNarrativeRole("actor")}
+                    className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "actor" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  >
+                    <div className="bg-black text-white p-2 rounded-lg"><User size={20} /></div>
+                    <div className="text-left">
+                      <p className="font-black text-sm uppercase">{ui("직접 연기하는 배우", "Actor / Performer")}</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-2 border-black">
+                <p className="text-sm font-black text-gray-700 uppercase mb-4 flex items-center gap-2">
+                  <Layers size={18} className="text-blue-600" /> {ui("캐릭터 일관성", "Character Consistency")}
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCharacterConsistencyMode("loose")}
+                    className={`flex items-start gap-4 p-4 border-4 transition-all ${characterConsistencyMode === "loose" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  >
+                    <div className="bg-white border-2 border-black p-2 rounded-lg">
+                      <p className="text-[10px] font-black uppercase">LOOSE</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-black text-sm uppercase">{ui("느슨", "Loose")}</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCharacterConsistencyMode("strict")}
+                    className={`flex items-start gap-4 p-4 border-4 transition-all ${characterConsistencyMode === "strict" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                  >
+                    <div className="bg-black text-white p-2 rounded-lg">
+                      <p className="text-[10px] font-black uppercase">STRICT</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-black text-sm uppercase">{ui("엄격", "Strict")}</p>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3393,8 +4084,8 @@ const App: React.FC = () => {
                 <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="text-xs font-black text-slate-700 uppercase">{ui("주연(최대 2명)", "Lead Characters (Max 2)")}</p>
-                    <p className="mt-2 text-[10px] font-bold text-slate-500">
-                      {ui("저장됨: 이름/외형/페르소나/말버릇/주인공 역할 (사진은 저장 안 함)", "Saved: name, appearance, persona, catchphrase, role. Photos are not saved.")}
+                    <p className="mt-2 text-[10px] md:text-xs font-bold text-slate-500 leading-relaxed">
+                      {ui("주인공 1명만 있어도 다음 단계로 갈 수 있어.", "You can continue with just 1 lead character.")}
                     </p>
                   </div>
                   <div className="w-full md:w-[420px]">
@@ -3442,7 +4133,7 @@ const App: React.FC = () => {
                         className="bg-black text-white px-3 py-2 font-black flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors text-[10px] md:text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                         title={ui("선택된 프리셋을 주연+보조 전체에 적용", "Apply selected preset to lead and supporting cast")}
                       >
-                        <FolderOpen size={14} /> LOAD ALL
+                        <FolderOpen size={14} /> {ui("전체 불러오기", "Load All")}
                       </button>
                       <button
                         type="button"
@@ -3450,7 +4141,7 @@ const App: React.FC = () => {
                         className="border-2 border-black bg-white px-3 py-2 font-black flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors text-[10px] md:text-xs"
                         title={ui("현재 캐스트를 프리셋으로 저장", "Save current cast as preset")}
                       >
-                        <Save size={14} /> SAVE PRESET
+                        <Save size={14} /> {ui("프리셋 저장", "Save Preset")}
                       </button>
                       <button
                         type="button"
@@ -3459,7 +4150,7 @@ const App: React.FC = () => {
                         className="border-2 border-black bg-white px-3 py-2 font-black flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors text-[10px] md:text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                         title={ui("선택된 프리셋 삭제", "Delete selected preset")}
                       >
-                        <Trash2 size={14} /> DELETE
+                        <Trash2 size={14} /> {ui("삭제", "Delete")}
                       </button>
                     </div>
                   </div>
@@ -3517,52 +4208,14 @@ const App: React.FC = () => {
                       </select>
                     </div>
 
-                    <div className="bg-white border-2 border-black p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-[10px] font-black uppercase text-slate-600">{ui("레퍼런스 사진", "Reference Photos")}</p>
-                        <p className="text-[10px] font-bold text-slate-500">{(c.reference_images || []).length}/{MAX_REF_IMAGES_PER_CHARACTER}</p>
-                      </div>
-
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        id={`cast-img-${c.id}`}
-                        className="hidden"
-                        onChange={(e) => {
-                          void addReferenceImages(c.id, e.target.files);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <label
-                        htmlFor={`cast-img-${c.id}`}
-                        className="inline-block mt-2 bg-black text-white px-4 py-2 font-black cursor-pointer hover:bg-blue-600 transition-colors text-[10px] md:text-xs"
-                      >
-                        {ui("사진 추가", "Add Photos")}
-                      </label>
-
-                      {(c.reference_images || []).length > 0 ? (
-                        <div className="mt-3 grid grid-cols-4 gap-2">
-                          {(c.reference_images || []).map((url, idx) => (
-                            <div key={`${c.id}_${idx}`} className="relative border-2 border-black bg-white overflow-hidden aspect-square">
-                              <img src={url} alt={`${c.name || "protagonist"} ref ${idx + 1}`} className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => removeReferenceImage(c.id, idx)}
-                                className="absolute top-1 right-1 bg-white border-2 border-black p-1 hover:bg-slate-100"
-                                title={ui("삭제", "Remove")}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-[10px] font-bold text-slate-500">
-                          {ui("사진은 선택사항이야. 넣으면 캐릭터 일관성이 좋아져.", "Photos are optional, but they improve character consistency.")}
-                        </p>
-                      )}
-                    </div>
+	                    {renderCharacterReferenceControls(c, {
+	                      inputId: `cast-img-${c.id}`,
+	                      displayName: String(c.name || "").trim(),
+	                      altFallback: "protagonist",
+	                      panelClassName: "bg-white border-2 border-black p-3",
+	                      titleClassName: "text-[10px] font-black uppercase text-slate-600",
+	                      countClassName: "text-[10px] font-bold text-slate-500"
+	                    })}
                   </div>
                 ))}
               </div>
@@ -3578,7 +4231,7 @@ const App: React.FC = () => {
                         className="w-full border-2 border-black px-3 py-2 font-black outline-none focus:bg-white text-[10px] md:text-xs bg-white"
                       >
                         <option value="">
-                          {castPresets.length > 0 ? "(프리셋 선택)" : "(저장된 프리셋 없음)"}
+                          {castPresets.length > 0 ? ui("(프리셋 선택)", "(Select preset)") : ui("(저장된 프리셋 없음)", "(No saved presets)")}
                         </option>
                         {castPresets
                           .slice()
@@ -3668,52 +4321,14 @@ const App: React.FC = () => {
                         </select>
                       </div>
 
-                      <div className="bg-blue-100 border-2 border-black p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[10px] font-black uppercase text-blue-900">{ui("레퍼런스 사진", "Reference Photos")}</p>
-                          <p className="text-[10px] font-bold text-blue-900/70">{(c.reference_images || []).length}/{MAX_REF_IMAGES_PER_CHARACTER}</p>
-                        </div>
-
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          id={`cast-img-${c.id}`}
-                          className="hidden"
-                          onChange={(e) => {
-                            void addReferenceImages(c.id, e.target.files);
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                        <label
-                          htmlFor={`cast-img-${c.id}`}
-                          className="inline-block mt-2 bg-black text-white px-4 py-2 font-black cursor-pointer hover:bg-blue-600 transition-colors text-[10px] md:text-xs"
-                        >
-                          {ui("사진 추가", "Add Photos")}
-                        </label>
-
-                        {(c.reference_images || []).length > 0 ? (
-                          <div className="mt-3 grid grid-cols-4 gap-2">
-                            {(c.reference_images || []).map((url, idx) => (
-                              <div key={`${c.id}_${idx}`} className="relative border-2 border-black bg-white overflow-hidden aspect-square">
-                                <img src={url} alt={`${c.name || "supporting"} ref ${idx + 1}`} className="w-full h-full object-cover" />
-                                <button
-                                  type="button"
-                                  onClick={() => removeReferenceImage(c.id, idx)}
-                                  className="absolute top-1 right-1 bg-white border-2 border-black p-1 hover:bg-slate-100"
-                                  title={ui("삭제", "Remove")}
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-[10px] font-bold text-blue-900/70">
-                            {ui("사진은 선택사항이야. 넣으면 보조 출연자도 일관성이 좋아져.", "Photos are optional, but they improve supporting cast consistency.")}
-                          </p>
-                        )}
-                      </div>
+	                      {renderCharacterReferenceControls(c, {
+	                        inputId: `cast-img-${c.id}`,
+	                        displayName: String(c.name || "").trim(),
+	                        altFallback: "supporting",
+	                        panelClassName: "bg-blue-100 border-2 border-black p-3",
+	                        titleClassName: "text-[10px] font-black uppercase text-blue-900",
+	                        countClassName: "text-[10px] font-bold text-blue-900/70"
+	                      })}
                     </div>
                   ))
                 )}
@@ -3730,10 +4345,6 @@ const App: React.FC = () => {
                   {productReferenceImages.length}/{MAX_PRODUCT_REF_IMAGES}
                 </p>
               </div>
-              <p className="text-[10px] font-bold text-slate-500 leading-relaxed mb-3">
-                {ui("리뷰 모드에서 상품이 컷마다 비슷하게 그려지도록 돕는 레퍼런스야. 로고/텍스트는 그대로 복제하지 않을 수 있어.", "This helps keep the reviewed product visually consistent. Logos and text may not be copied exactly.")}
-              </p>
-
               <input
                 type="file"
                 accept="image/*"
@@ -3768,21 +4379,22 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="mt-2 text-[10px] font-bold text-slate-600">
-                  {ui("예: 이어폰/키보드/노트/가방 등. 정면 1장만 있어도 충분해.", "Example: earbuds, keyboard, notebook, bag. One front image is enough.")}
-                </p>
-              )}
+              ) : null}
             </div>
             )}
 
-            <div className="mt-12 flex justify-end">
+            <div className="mt-12 flex flex-col items-end gap-3">
+              <p className={`text-[10px] md:text-xs font-black ${canProceedCharacterSetup ? "text-emerald-700" : "text-slate-500"}`}>
+                {canProceedCharacterSetup
+                  ? ui("준비됐어. 주인공 1명만으로도 다음 단계 진행 가능해.", "Ready. You can continue with just 1 lead character.")
+                  : ui("주인공 이름, 외형, 사진 중 하나만 채워도 다음으로 갈 수 있어.", "Add a lead name, appearance, or photo to continue.")}
+              </p>
               <button
-                onClick={() => setStatus(AppStatus.STYLE_SELECT)}
-                disabled={!canProceedCharacterSetup}
-                className="bg-black text-white px-10 py-5 font-black flex items-center gap-2 hover:bg-blue-600 transition-colors uppercase italic disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => void handleGeneratePlan()}
+                disabled={!canGeneratePlan}
+                className={`px-10 py-5 font-black flex items-center gap-2 uppercase italic transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${creationType === "story" ? "bg-violet-600 text-white hover:bg-violet-700" : creationType === "paper" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}
               >
-                {ui("다음: 그림체 선택", "Next: Choose Art Style")} <ArrowRight />
+                {creationType === "story" ? ui("각색하고 플랜 생성", "Adapt & Plan") : creationType === "paper" ? ui("계속해서 플랜 생성", "Continue & Plan") : ui("분석하고 플랜 생성", "Analyze & Plan")} <ArrowRight />
               </button>
             </div>
           </div>
@@ -3793,10 +4405,10 @@ const App: React.FC = () => {
             <div className="mb-3">
               <PreviousStepButton />
             </div>
-            <h2 className="text-2xl md:text-3xl font-black mb-8 border-l-8 border-blue-600 pl-4 uppercase">{ui("03. 아트 디렉션", "03. Art Direction")}</h2>
+            <h2 className="text-2xl md:text-3xl font-black mb-8 border-l-8 border-blue-600 pl-4 uppercase">{ui("02. 아트 디렉션", "02. Art Direction")}</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {(() => {
-                const allCategories = ["Webtoon", "Manga", "Illustration", "3D/Craft", "Realism", "Uncategorized"].filter(cat =>
+                const allCategories = ["Webtoon", "Anime", "Manga", "Illustration", "3D/Craft", "Realism", "Uncategorized"].filter(cat =>
                   stylePresets.some(p => (p.category || "Uncategorized") === cat)
                 );
 
@@ -3832,9 +4444,6 @@ const App: React.FC = () => {
                     {filteredPresets.map(p => (
                       <div key={p.id} onClick={() => setSelectedPresetId(p.id)} className={`p-4 md:p-6 border-4 cursor-pointer transition-all flex flex-col h-full ${selectedPresetId === p.id ? 'border-blue-600 bg-blue-50 scale-[1.02] shadow-md' : 'border-black hover:bg-slate-50'}`}>
                         <h3 className={`font-black text-xs md:text-sm mb-2 uppercase ${selectedPresetId === p.id ? "text-blue-700" : "text-black"}`}>{p.label}</h3>
-                        <div className="flex-1">
-                          <p className="text-[9px] md:text-[10px] font-bold text-gray-500 leading-tight">{p.preview_hint}</p>
-                        </div>
                         {selectedPresetId === p.id && (
                           <div className="mt-3 flex justify-end">
                             <CheckCircle2 size={16} className="text-blue-600" />
@@ -3849,9 +4458,6 @@ const App: React.FC = () => {
 
             <div className="mt-8 p-6 bg-slate-50 border-2 border-black">
               <p className="text-xs font-black text-slate-700 uppercase mb-2">{ui("스타일 레퍼런스(선택)", "Style Reference (Optional)")}</p>
-              <p className="text-[10px] font-bold text-slate-500 leading-relaxed mb-4">
-                {ui("원하는 그림체/질감/채색 레퍼런스를 업로드하면 생성 시 스타일 참고용으로 함께 전달돼. 사진 속 인물/로고/문구를 그대로 복제하는 용도는 아니야.", "Upload a style, texture, or coloring reference and it will be used during generation. It is not meant to copy people, logos, or text exactly.")}
-              </p>
 
               <input
                 type="file"
@@ -3919,17 +4525,14 @@ const App: React.FC = () => {
             <div className="mt-12 flex justify-end items-center">
               <button
                 onClick={() => {
-                  const nextStyle = {
-                    ...selectStyle(stylePresets, selectedPresetId, "", { publicationFormat, mangaColorMode }),
-                    style_reference_image: styleReferenceImage
-                  };
+                  const nextStyle = resolveCurrentStyle();
                   setFinalStyle(nextStyle);
-                  void handleGeneratePlan(nextStyle);
+                  setStatus(AppStatus.CHARACTER_SELECT);
                 }}
-                disabled={!canGeneratePlan}
-                className={`px-10 py-5 font-black flex items-center gap-2 uppercase italic transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${creationType === "story" ? "bg-violet-600 text-white hover:bg-violet-700" : creationType === "paper" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                disabled={!canProceedMissionSetup || stylePresets.length === 0}
+                className="bg-black text-white px-10 py-5 font-black flex items-center gap-2 hover:bg-blue-600 transition-colors uppercase italic disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {creationType === "story" ? ui("각색하고 플랜 생성", "Adapt & Plan") : creationType === "paper" ? ui("계속해서 플랜 생성", "Continue & Plan") : ui("분석하고 플랜 생성", "Analyze & Plan")} <ArrowRight />
+                {ui("다음: 캐릭터 설정", "Next: Character Setup")} <ArrowRight />
               </button>
             </div>
           </div>
@@ -3949,6 +4552,8 @@ const App: React.FC = () => {
                   <button
                     onClick={() => {
                       setCreationType("educational");
+                      setNarrativeRole(getDefaultNarrativeRole("educational"));
+                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
                       if (comicMode === "pure_cinematic") setComicMode("learning");
                     }}
                     className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "educational" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
@@ -3958,7 +4563,9 @@ const App: React.FC = () => {
                   <button
                     onClick={() => {
                       setCreationType("story");
+                      setNarrativeRole(getDefaultNarrativeRole("story"));
                       setComicMode("pure_cinematic");
+                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
                     }}
                     className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "story" ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                   >
@@ -3967,20 +4574,17 @@ const App: React.FC = () => {
                   <button
                     onClick={() => {
                       setCreationType("paper");
+                      setNarrativeRole(getDefaultNarrativeRole("paper"));
                       setPublicationFormat("webtoon");
+                      setToneMode("normal");
+                      setToneLevel("medium");
+                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
                     }}
                     className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "paper" ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("논문 만화", "Paper Comic")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {creationType === "story"
-                    ? ui("대본, 소설, 시나리오를 입력하면 만화 패널로 각색해. 기본은 순수 스토리텔링이야.", "Adapt a script, prose, or scenario into comic panels. The default is pure storytelling.")
-                    : creationType === "paper"
-                      ? ui("논문 PDF만 업로드하면 앱이 읽고 핵심을 요약한 뒤 설명 만화로 바꿔.", "Upload a paper PDF and the app will summarize it into an explanatory comic.")
-                      : ui("주제를 입력하면 교육 콘텐츠를 만화로 생성해.", "Enter a topic to create an educational comic.")}
-                </p>
               </div>
 
               {creationType === "educational" && (
@@ -3988,32 +4592,31 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("만화 모드", "Comic Mode")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setComicMode("learning")}
+                    onClick={() => {
+                      setComicMode("learning");
+                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
+                    }}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${comicMode === "learning" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("학습", "Learning")}
                   </button>
                   <button
-                    onClick={() => setComicMode("cinematic")}
+                    onClick={() => {
+                      setComicMode("cinematic");
+                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
+                    }}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${isEduCinematicSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("장면형 학습", "Scene-Led")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {isEduCinematicSelected
-                      ? ui("팁: 교육 핵심은 유지하되 설명을 줄이고 장면 중심으로 진행해.", "Tip: Keep the educational core, but reduce explanation and lead with scenes.")
-                      : ui("팁: 근거와 정의 중심으로 구성하고 필요할 때만 오해를 교정해.", "Tip: Build around evidence and definitions, correcting misconceptions only when needed.")}
-                </p>
               </div>
               )}
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("출판 형식", "Publication Format")}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {((creationType === "paper"
-                    ? ["learning_comic", "webtoon", "manga"]
-                    : ["learning_comic", "webtoon", "manga", "kling_i2v"]) as PublicationFormat[]).map((fmt) => {
+                  {getSelectablePublicationFormats(creationType).map((fmt) => {
                     const cfg = FORMAT_CONFIGS[fmt];
                     const isActive = publicationFormat === fmt;
                     const colorClass = fmt === "kling_i2v" && isActive
@@ -4031,9 +4634,11 @@ const App: React.FC = () => {
                         onClick={() => {
                           if (fmt === publicationFormat) return;
                           setPublicationFormat(fmt);
+                          if (isLearningComic(fmt)) setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
                           if (seriesPlan) {
                             setSeriesPlan(null);
                             setPageResults([]);
+                            setPageErrors({});
                             setWebtoonEpisodeResult(null);
                             setIsBuildingWebtoonEpisode(false);
                             setPageRenderedAt({});
@@ -4086,9 +4691,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 ) : null}
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {ui(getFormatConfig(publicationFormat).descriptionKo, getFormatConfig(publicationFormat).description)}
-                </p>
               </div>
 
               {creationType === "educational" && (<>
@@ -4117,25 +4719,6 @@ const App: React.FC = () => {
                     {ui("리뷰", "Review")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {isPureCinematicSelected
-                    ? questionType === "compare"
-                      ? ui('팁: "A vs B"를 라이벌전처럼 만들면 좋아.', 'Tip: Turn "A vs B" into a rivalry with a strong ending hook.')
-                      : questionType === "review"
-                        ? ui("팁: 시네마틱 리뷰는 제품 설명보다 체험극으로 설계하면 강해.", "Tip: Cinematic reviews work best as experience-driven mini dramas.")
-                        : ui("팁: 설명도 순수 스토리 모드에선 욕망/갈등/선택 중심으로 쓰면 좋아.", "Tip: In pure story mode, even explain topics work better around desire, conflict, and choice.")
-                    : isEduCinematicSelected
-                      ? questionType === "compare"
-                        ? ui('팁: "A vs B" 토픽이면 대결처럼 전개해.', 'Tip: Treat "A vs B" topics like a four-beat showdown.')
-                        : questionType === "review"
-                          ? ui("팁: 평가표보다 상황극으로 장단점을 보여주는 게 좋아.", "Tip: Show pros and cons through scenes instead of a scorecard.")
-                          : ui("팁: 설명 대신 상황극으로 보여줘. 토픽을 장면처럼 써도 좋아.", "Tip: Show through situations rather than explanation.")
-                      : questionType === "compare"
-                        ? ui('팁: 토픽에 "A vs B"처럼 입력하면 비교축 설계가 쉬워.', 'Tip: Enter a topic like "A vs B" to make comparison axes clearer.')
-                        : questionType === "review"
-                          ? ui("팁: 상품명/모델명 + 사용 상황까지 적으면 리뷰가 안정돼.", "Tip: Add the product/model plus usage context for steadier reviews.")
-                          : ui("팁: 오해가 많은 주제는 정의와 경계를 먼저 잡으면 좋아.", "Tip: For topics with common misconceptions, define the scope first.")}
-                </p>
               </div>
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4161,19 +4744,6 @@ const App: React.FC = () => {
                     {ui("오해 깨기", "Myth Busting")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {isPureCinematicSelected
-                    ? ui("팁: 순수 시네마틱은 장면 리듬과 갈등 설계가 핵심이야.", "Tip: Pure cinematic mode is mostly about rhythm and conflict.")
-                    : isEduCinematicSelected
-                      ? ui("팁: 장면형 학습은 오프닝보다 장면 전개가 더 중요해.", "Tip: Scene-led learning depends more on scene flow than opening style.")
-                      : questionType === "compare"
-                        ? ui("팁: 비교는 비교축이 중심이라 도입 영향이 작아.", "Tip: Compare mode is driven more by axes than intro style.")
-                        : questionType === "review"
-                          ? ui("팁: 리뷰는 평가 기준과 장단점이 핵심이야.", "Tip: Review mode is driven by criteria, pros, and cons.")
-                          : introStyle === "myth_busting"
-                            ? ui("팁: 오해를 먼저 보여준 뒤 자연스럽게 바로잡아.", "Tip: Start with a misconception and correct it naturally.")
-                            : ui("팁: 불필요한 반전 없이 핵심부터 바로 들어가.", "Tip: Start directly without an unnecessary twist.")}
-                </p>
               </div>
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4210,9 +4780,6 @@ const App: React.FC = () => {
                     Expert
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {ui("독자 수준은 플래너(대사/컷 구성) 단계에서 가장 강하게 반영돼.", "Audience level strongly affects planning, dialogue, and panel composition.")}
-                </p>
               </div>
               </>)}
 
@@ -4239,13 +4806,6 @@ const App: React.FC = () => {
                     {ui("상황/설정", "Scenario")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {storyInputType === "script"
-                    ? ui("대사와 지문이 포함된 대본을 입력해. AI가 패널에 직접 매핑해.", "Enter a script with dialogue and action. The AI maps it directly to panels.")
-                    : storyInputType === "prose"
-                      ? ui("소설이나 산문 텍스트를 입력해. AI가 핵심 장면을 추출해서 패널화해.", "Enter prose. The AI extracts key scenes and turns them into panels.")
-                      : ui("짧은 상황이나 설정을 입력해. AI가 완전한 스토리로 확장해.", "Enter a short premise. The AI expands it into a full story.")}
-                </p>
               </div>
 
               <div className="mb-8">
@@ -4364,9 +4924,6 @@ const App: React.FC = () => {
                     {ui("가드 OFF", "Guard Off")}
                   </button>
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {ui("ON이면 스토리 모드 프롬프트에서 교육/설명형 연출을 억제해. OFF이면 그 가드를 빼고 테스트해.", "When on, story mode suppresses educational or explanatory staging. Turn it off to test without that guard.")}
-                </p>
               </div>
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4384,7 +4941,6 @@ const App: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">{ui("선택하지 않아도 돼. AI가 텍스트에서 장르를 자동 감지해.", "Optional. The AI can infer genre from the text.")}</p>
               </div>
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4427,21 +4983,38 @@ const App: React.FC = () => {
                         </button>
                       ))}
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500 mt-2">
-                      {ui("논문 용어 보존 수준과 설명 난이도에 가장 크게 반영돼.", "This mainly controls terminology preservation and explanation difficulty.")}
-                    </p>
                   </div>
 
-                  <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-                    <p className="text-xs font-black text-slate-700 uppercase mb-4 flex items-center gap-2">
-                      <FileText size={14} /> {ui("논문 PDF", "Paper PDF")}
-                    </p>
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                      <p className="text-[10px] font-bold text-slate-500">
-                        {ui("논문 PDF만 업로드하면 앱이 자동으로 핵심 브리프를 추출해.", "Upload a paper PDF and the app extracts the core brief automatically.")}
-                      </p>
-                      <label className="flex items-center gap-1 text-[10px] font-black uppercase bg-white border-2 border-black px-2 py-1 hover:bg-emerald-50 cursor-pointer">
-                        <Upload size={12} /> {ui("PDF 업로드", "Upload PDF")}
+	                  <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
+	                    <p className="text-xs font-black text-slate-700 uppercase mb-4 flex items-center gap-2">
+	                      <FileText size={14} /> {ui("논문 자료", "Paper Source")}
+	                    </p>
+	                    <div className="flex flex-col md:flex-row gap-2 mb-4">
+	                      <input
+	                        type="url"
+	                        value={paperUrl}
+	                        onChange={(e) => {
+	                          setPaperUrl(e.target.value);
+	                          setPaperBriefError(null);
+	                        }}
+	                        onKeyDown={(e) => {
+	                          if (e.key === "Enter") void runPaperUrlAnalysis();
+	                        }}
+	                        placeholder={ui("논문 URL 붙여넣기 (arXiv, DOI, PubMed, 저널 페이지 등)", "Paste a paper URL (arXiv, DOI, PubMed, journal page, etc.)")}
+	                        className="flex-1 border-2 border-black bg-white px-3 py-2 text-xs font-bold outline-none focus:bg-emerald-50"
+	                      />
+	                      <button
+	                        onClick={() => { void runPaperUrlAnalysis(); }}
+	                        disabled={isPaperAnalyzing || !paperUrl.trim()}
+	                        className="bg-emerald-600 text-white px-4 py-2 text-xs font-black border-2 border-black hover:bg-emerald-700 transition-colors disabled:opacity-50"
+	                      >
+	                        {ui("AI 조사", "AI Research")}
+	                      </button>
+	                    </div>
+	                    <div className="flex items-center justify-between gap-3 mb-3">
+	                      <p className="text-[10px] font-black uppercase text-slate-500">{ui("또는 PDF 원문 업로드", "Or upload the PDF")}</p>
+	                      <label className="flex items-center gap-1 text-[10px] font-black uppercase bg-white border-2 border-black px-2 py-1 hover:bg-emerald-50 cursor-pointer">
+	                        <Upload size={12} /> {ui("PDF 업로드", "Upload PDF")}
                         <input
                           type="file"
                           accept=".pdf,application/pdf"
@@ -4449,24 +5022,26 @@ const App: React.FC = () => {
                           onClick={(e) => { (e.currentTarget as HTMLInputElement).value = ""; }}
                           onChange={(e) => { void handlePaperFileChange(e.target.files?.[0] || null); }}
                         />
-                      </label>
-                    </div>
-                    {paperFile ? (
-                      <p className="text-[10px] font-bold text-slate-500 mb-3">
-                        {ui("업로드됨", "Uploaded")}: <span className="font-black">{paperFile.name}</span>
-                      </p>
-                    ) : (
-                      <p className="text-[10px] font-bold text-slate-500 mb-3">
-                        {ui("PDF 1개만 지원해. URL/DOI/보조자료는 v1 범위에서 제외돼.", "Only one PDF is supported. URL, DOI, and supplements are out of scope for v1.")}
-                      </p>
-                    )}
+	                      </label>
+	                    </div>
+	                    {paperFile ? (
+	                      <p className="text-[10px] font-bold text-slate-500 mb-3">
+	                        {ui("업로드됨", "Uploaded")}: <span className="font-black">{paperFile.name}</span>
+	                      </p>
+	                    ) : paperUrl.trim() ? (
+	                      <p className="text-[10px] font-bold text-slate-500 mb-3">
+	                        {ui("URL", "URL")}: <span className="font-black break-all">{paperUrl.trim()}</span>
+	                      </p>
+	                    ) : (
+	                      null
+	                    )}
 
                     {isPaperAnalyzing && (
                       <div className="border-2 border-black bg-white p-4 flex items-center gap-3">
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                        <p className="text-[10px] font-black uppercase">{ui("논문 브리프 추출 중...", "Extracting paper brief...")}</p>
-                      </div>
-                    )}
+	                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+	                        <p className="text-[10px] font-black uppercase">{ui("논문 브리프 추출 중...", "Extracting paper brief...")}</p>
+	                      </div>
+	                    )}
 
                     {paperBriefError && (
                       <p className="text-[10px] font-black text-red-600">{paperBriefError}</p>
@@ -4486,16 +5061,27 @@ const App: React.FC = () => {
                           </span>
                         </div>
 
-                        <div>
-                          <p className="text-sm md:text-base font-black">{paperBrief.paper_title}</p>
-                          <p className="text-[11px] font-bold text-slate-600 mt-2">{paperBrief.one_line_takeaway}</p>
-                        </div>
+	                        <div>
+	                          <p className="text-sm md:text-base font-black">{paperBrief.paper_title}</p>
+	                          <p className="text-[11px] font-bold text-slate-600 mt-2">{paperBrief.one_line_takeaway}</p>
+	                        </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-bold text-slate-700">
-                          <div className="border-2 border-black bg-emerald-50 p-3">
-                            <p className="font-black uppercase mb-2 text-emerald-700">{ui("왜 이 연구가 필요했나", "Why This Research Matters")}</p>
-                            <p>{paperBrief.motivation_context || "연구 필요성은 본문 근거가 더 필요해 보수적으로 비워뒀습니다."}</p>
-                          </div>
+	                        {(paperBrief.paper_story_units || []).length > 0 && (
+	                          <div className="border-2 border-black bg-emerald-50 p-3 text-[10px] font-bold text-slate-700">
+	                            <p className="font-black uppercase mb-2 text-emerald-700">{ui("논문 전개 흐름", "Paper Story Flow")}</p>
+	                            <div className="space-y-1">
+	                              {(paperBrief.paper_story_units || []).slice(0, 6).map((unit, index) => (
+	                                <p key={index}>- {unit.step}: {unit.reader_question}</p>
+	                              ))}
+	                            </div>
+	                          </div>
+	                        )}
+
+	                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-bold text-slate-700">
+	                          <div className="border-2 border-black bg-emerald-50 p-3">
+	                            <p className="font-black uppercase mb-2 text-emerald-700">{ui("배경과 문제의 틈", "Background & Gap")}</p>
+	                            <p>{paperBrief.motivation_context || "연구 필요성은 본문 근거가 더 필요해 보수적으로 비워뒀습니다."}</p>
+	                          </div>
                           <div className="border-2 border-black bg-slate-50 p-3">
                             <p className="font-black uppercase mb-2 text-slate-500">{ui("독자용 도입 예시", "Reader Hook")}</p>
                             <p>{paperBrief.reader_hook_example || "도입 예시는 논문 맥락에서 안전하게 유도되지 않아 생략됐습니다."}</p>
@@ -4549,17 +5135,17 @@ const App: React.FC = () => {
                           </div>
                         )}
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => { if (paperFile) void runPaperAnalysis(paperFile); }}
-                            disabled={!paperFile || isPaperAnalyzing}
-                            className="bg-white text-black px-4 py-2 text-xs font-black border-2 border-black hover:bg-slate-100 transition-colors disabled:opacity-50"
-                          >
+	                        <div className="flex items-center gap-2">
+	                          <button
+	                            onClick={() => {
+	                              if (paperFile) void runPaperAnalysis(paperFile);
+	                              else void runPaperUrlAnalysis();
+	                            }}
+	                            disabled={(!paperFile && !paperUrl.trim()) || isPaperAnalyzing}
+	                            className="bg-white text-black px-4 py-2 text-xs font-black border-2 border-black hover:bg-slate-100 transition-colors disabled:opacity-50"
+	                          >
                             {ui("재분석", "Re-analyze")}
                           </button>
-                          <p className="text-[10px] font-bold text-slate-500">
-                            {ui("브리프가 괜찮으면 아래 버튼으로 바로 플랜을 생성해.", "If the brief looks good, generate the plan with the button below.")}
-                          </p>
                         </div>
                       </div>
                     )}
@@ -4567,9 +5153,10 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {!isPaperSelected && (
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("스토리 톤", "Story Tone")}</p>
+                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">
+                  {isPaperSelected ? ui("논문 톤", "Paper Tone") : creationType === "story" ? ui("스토리 톤", "Story Tone") : ui("톤", "Tone")}
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setToneMode("normal")}
@@ -4609,11 +5196,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 )}
-                <p className="text-[10px] font-bold text-slate-500 mt-2">
-                  {ui("개그모드는 비유/반응/상황으로 웃기되 사실/근거는 흐리지 않게 작성해.", "Gag mode adds humor through analogies, reactions, and situations without blurring facts.")}
-                </p>
               </div>
-              )}
 
               {!isPaperSelected && (
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4649,15 +5232,7 @@ const App: React.FC = () => {
                       placeholder={ui('예: "아주 건조한 사무적인 말투 + 손짓 최소화"', 'Example: "very dry office tone + minimal gestures"')}
                       className="w-full border-2 border-black p-3 font-mono text-[10px] bg-white h-24 resize-y"
                     />
-                    <p className="text-[10px] font-bold text-slate-500 mt-2">
-                      {ui("욕설/혐오/비하/노골적 성적 표현은 자동으로 금지돼.", "Profanity, hate, insults, and explicit sexual content are automatically blocked.")}
-                    </p>
                   </div>
-                )}
-                {deliveryStyleId === "sensual_pg13" && (
-                  <p className="text-[10px] font-bold text-slate-500 mt-2 flex items-center gap-1">
-                    <AlertTriangle size={12} /> {ui("PG-13 범위의 은근한 분위기만 허용돼. 노골적 성적 묘사는 금지야.", "Only subtle PG-13 mood is allowed. Explicit sexual description is prohibited.")}
-                  </p>
                 )}
               </div>
               )}
@@ -4673,92 +5248,102 @@ const App: React.FC = () => {
                   setTopic(e.target.value);
                   clearResearchDigest();
                 }}
+                aria-invalid={isTopicRequiredMissing}
+                aria-describedby={isTopicRequiredMissing ? "topic-required-message" : undefined}
                 placeholder={ui("예: as if 사용법, 광합성 원리", "Example: how to use 'as if', photosynthesis")}
-                className="w-full border-4 border-black p-4 md:p-6 text-lg md:text-xl font-bold mb-8 outline-none focus:bg-yellow-50"
+                className={`w-full border-4 p-4 md:p-6 text-lg md:text-xl font-bold outline-none transition-colors ${
+                  isTopicRequiredMissing
+                    ? "border-red-600 bg-red-50 placeholder-red-300 focus:bg-red-50 focus:ring-4 focus:ring-red-100"
+                    : "border-black bg-white focus:bg-yellow-50"
+                } ${isTopicRequiredMissing ? "mb-2" : "mb-8"}`}
               />
+              {isTopicRequiredMissing && (
+                <p id="topic-required-message" className="mb-8 text-xs font-black text-red-600">
+                  {ui("필수 입력 항목이야. 학습할 주제를 먼저 입력해줘.", "Required field. Enter the topic to learn first.")}
+                </p>
+              )}
               </>)}
 
-              <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
+              <div className="mb-8">
                 {creationType === "educational" && (<>
-                <p className="text-xs font-black text-slate-700 uppercase mb-4 flex items-center gap-2">
-                  <FileText size={14} /> {isPureCinematicSelected ? ui("리서치/스토리 자료", "Research & Story Materials") : ui("리서치/프레이밍", "Research & Framing")}
-                </p>
-                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("리서치 흐름", "Research Flow")}</p>
-                <div className="border-2 border-black bg-black text-white px-4 py-3 mb-3">
-                  <p className="text-[10px] font-black uppercase">Codex Digest</p>
-                </div>
                 <div className="grid grid-cols-1 gap-3">
-                  <p className="text-[10px] font-bold text-slate-500">
-                    {isPureCinematicSelected
-                      ? ui("Codex가 시네마틱용 Research Pack을 먼저 만든 뒤 페이지 수와 스토리 플랜을 잡아.", "Codex first creates a cinematic Research Pack, then decides page count and story plan.")
-                      : ui("Codex가 Research Pack을 먼저 만든 뒤 페이지 수와 플랜을 잡아.", "Codex first creates a Research Pack, then decides page count and plan.")}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500">
-                    {ui("Research Pack 생성도 아래 추론 강도 설정을 함께 사용해.", "Research Pack generation also uses the reasoning effort setting below.")}
-                  </p>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-black uppercase text-slate-600">{ui("자료 입력/업로드", "Materials Input / Upload")}</p>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-[10px] font-black uppercase bg-white border-2 border-black px-2 py-1 hover:bg-yellow-50 cursor-pointer">
-                          <Upload size={12} /> Upload
-                          <input
-                            type="file"
-                            accept=".txt,.md,.json,.pdf,text/plain,application/json,application/pdf"
-                            className="hidden"
-                            onClick={(e) => {
-                              (e.currentTarget as HTMLInputElement).value = "";
-                            }}
-                            onChange={(e) => handleResearchFileChange(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                        {researchReportFile && (
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeResearch}
+                    disabled={isResearchAnalyzing || !(topic.trim() || researchReportText.trim() || researchReportFile)}
+                    className="w-full min-h-[60px] bg-black text-white px-5 py-4 text-base font-black hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:bg-slate-400 disabled:opacity-100 disabled:cursor-not-allowed"
+                  >
+                    {isResearchAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe size={14} />}
+                    {ui("AI로 핵심 정리하기", "Summarize with AI")}
+                  </button>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="mr-1 text-[10px] font-black uppercase text-slate-500">{ui("선택 자료 추가", "Optional material")}</span>
+                    <label className="flex items-center justify-center gap-1 text-[10px] font-black uppercase bg-white border-2 border-black px-3 py-2 hover:bg-yellow-50 cursor-pointer">
+                      <Upload size={12} /> {ui("PDF/TXT", "PDF/TXT")}
+                      <input
+                        type="file"
+                        accept=".txt,.md,.json,.pdf,text/plain,application/json,application/pdf"
+                        className="hidden"
+                        onClick={(e) => {
+                          (e.currentTarget as HTMLInputElement).value = "";
+                        }}
+                        onChange={(e) => handleResearchFileChange(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsManualMaterialOpen((prev) => !prev)}
+                      className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase border-2 border-black px-3 py-2 transition-colors ${
+                        isManualMaterialOpen ? "bg-yellow-50" : "bg-white hover:bg-slate-100"
+                      }`}
+                    >
+                      <FileText size={12} /> {ui("직접 입력", "Paste")}
+                    </button>
+                  </div>
+
+                  {(researchReportFile || researchDigestText) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {researchReportFile && (
+                        <>
+                          <p className="text-[10px] font-bold text-slate-500">
+                            {ui("업로드됨", "Uploaded")}: <span className="font-black">{researchReportFile.name}</span>
+                          </p>
                           <button
                             type="button"
                             onClick={() => handleResearchFileChange(null)}
                             className="text-[10px] font-black uppercase bg-white border-2 border-black px-2 py-1 hover:bg-slate-100"
                           >
-                            {ui("지우기", "Clear")}
+                            {ui("파일 지우기", "Clear File")}
                           </button>
-                        )}
-                      </div>
+                        </>
+                      )}
+                      {researchDigestText && (
+                        <button
+                          type="button"
+                          onClick={clearResearchDigest}
+                          className="bg-white text-black px-3 py-1 text-[10px] font-black border-2 border-black hover:bg-slate-100 transition-colors"
+                        >
+                          {ui("초기화", "Reset")}
+                        </button>
+                      )}
                     </div>
-                    {researchReportFile && (
-                      <p className="text-[10px] font-bold text-slate-500 mb-2">
-                        {ui("업로드됨", "Uploaded")}: <span className="font-black">{researchReportFile.name}</span>
-                      </p>
-                    )}
-                    <textarea
-                      value={researchReportText}
-                      onChange={(e) => {
-                        setResearchReportText(e.target.value);
-                        clearResearchDigest();
-                      }}
-                      placeholder={ui("자료를 붙여넣거나 파일을 업로드해. 비워두고 Digest를 누르면 주제 기준으로 Research Pack을 만들게.", "Paste materials or upload a file. Leave empty and run Digest to create a Research Pack from the topic.")}
-                      className="w-full border-2 border-black p-3 font-mono text-[10px] bg-white h-32 resize-y"
-                    />
-                  </div>
+                  )}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleAnalyzeResearch}
-                      disabled={isResearchAnalyzing || !topic.trim()}
-                      className="bg-black text-white px-4 py-2 text-xs font-black hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isResearchAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe size={14} />}
-                      {ui("Codex Digest 실행", "Run Codex Digest")}
-                    </button>
-                    {researchDigestText && (
-                      <button
-                        type="button"
-                        onClick={clearResearchDigest}
-                        className="bg-white text-black px-4 py-2 text-xs font-black border-2 border-black hover:bg-slate-100 transition-colors"
-                      >
-                        {ui("초기화", "Reset")}
-                      </button>
-                    )}
-                  </div>
+                  {isManualMaterialOpen && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("자료 직접 입력", "Enter Material")}</p>
+                      <textarea
+                        value={researchReportText}
+                        onChange={(e) => {
+                          setResearchReportText(e.target.value);
+                          clearResearchDigest();
+                        }}
+                        placeholder={ui("수업자료, 설명문, 기사, 유튜브 대본, 교재 내용을 붙여넣어줘.", "Paste class notes, articles, transcripts, or textbook text here.")}
+                        className="w-full border-2 border-black p-3 font-mono text-[10px] bg-white h-36 resize-y"
+                      />
+                    </div>
+                  )}
 
                   {researchDigestError && (
                     <p className="text-[10px] font-black text-red-600">{ui("Digest 오류", "Digest Error")}: {researchDigestError}</p>
@@ -4788,7 +5373,7 @@ const App: React.FC = () => {
                 </div>
                 </>)}
 
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`${creationType === "educational" ? "mt-8 border-t-2 border-slate-200 pt-6" : ""} grid grid-cols-1 md:grid-cols-2 gap-4`}>
                   <div>
                     <p className="text-[10px] font-black uppercase text-slate-600 mb-2">
                       {isPaperSelected ? ui("길이", "Length") : ui("스크립트 상세도", "Script Detail")}
@@ -4863,7 +5448,7 @@ const App: React.FC = () => {
                             {creationType === "story" && !storyPageSuggestions ? (
                               <>{ui("대기", "Waiting")}: <span className="font-black">{ui("스토리 분석 후 자동 결정", "auto after story analysis")}</span></>
                             ) : creationType === "educational" && !pageSuggestions ? (
-                              <>{ui("대기", "Waiting")}: <span className="font-black">{ui("Codex Digest 후 자동 결정", "auto after Codex Digest")}</span></>
+                              <>{ui("대기", "Waiting")}: <span className="font-black">{ui("AI 핵심 정리 후 자동 결정", "auto after AI summary")}</span></>
                             ) : (
                               <>{ui("추천", "Recommended")}: <span className="font-black">{targetPageCount}P</span></>
                             )}
@@ -4875,15 +5460,14 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {!isPaperSelected && (
-              <div className={`grid grid-cols-1 ${isI2VSelected ? "md:grid-cols-2" : "md:grid-cols-3"} gap-8 mb-8`}>
-                {!isI2VSelected ? (
+              <div className={`grid grid-cols-1 ${isLearningComicSelected ? "md:grid-cols-3" : "md:grid-cols-2"} gap-8 mb-8`}>
+                {isLearningComicSelected ? (
                   <div>
                     <p className="text-xs font-black text-slate-400 mb-3 uppercase flex items-center gap-2"><LayoutGrid size={14} /> {ui("레이아웃", "Layout Type")}</p>
                     <div className="grid grid-cols-3 gap-2">
                       {["low", "medium", "high"].map((v) => (
                         <button key={v} onClick={() => setLayoutVariety(v as LayoutVariety)} className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${layoutVariety === v ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}>
-                          {v === 'low' ? ui('단순', 'Simple') : v === 'medium' ? ui('다이내믹', 'Dynamic') : ui('프로', 'Pro')}
+                          {v === 'low' ? ui('단순', 'Simple') : v === 'medium' ? ui('다이내믹', 'Dynamic') : ui('프로 · 추천', 'Pro · Recommended')}
                         </button>
                       ))}
                     </div>
@@ -4898,7 +5482,6 @@ const App: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 mt-2">{ui("1K=빠름 / 2K=선명 / 4K=최고 해상도 (생성 시간 증가)", "1K=fast / 2K=sharp / 4K=highest resolution (slower)")}</p>
                 </div>
                 <div>
                   <p className="text-xs font-black text-slate-400 mb-3 uppercase flex items-center gap-2"><Globe size={14} /> {ui("결과물 언어", "Output Language")}</p>
@@ -4918,24 +5501,14 @@ const App: React.FC = () => {
                       English
                     </button>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 mt-2">
-                    {ui("같은 플랜으로도 결과물 언어만 바꿔 재생성할 수 있어. UI 언어 토글과는 별개야.", "You can regenerate the same plan in another output language. This is separate from the UI toggle.")}
-                  </p>
                 </div>
               </div>
-              )}
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("플래너 모델", "Planner Model")}</p>
                     <p className="text-xs font-black text-slate-800">Codex OAuth</p>
-                    <p className="text-[10px] font-bold text-slate-500 mt-1">
-                      {ui("실제 플랜/스크립트 생성", "Plan/script generation")}: <span className="font-black">{GEMINI_PLANNER_MODEL}</span>
-                    </p>
-                    <p className="text-[10px] font-bold text-slate-500">
-                      {ui("Codex 로그인 세션으로 장면/대사/페이지 플랜을 만들고, 이미지는 GPT 이미지 툴로 생성해.", "Uses the Codex login session for plans and GPT image tools for images.")}
-                    </p>
                     {!hasApiKey && (
                       <p className="text-[10px] font-black text-red-600 mt-2">
                         {ui("로컬 서버가 연결되지 않아서 최종 플랜 생성을 시작할 수 없어.", "Local server is not connected, so plan generation cannot start.")}
@@ -4964,19 +5537,16 @@ const App: React.FC = () => {
                         high
                       </button>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500 mt-2">
-                      {ui("기본값은 medium이야. 빠르게 볼 땐 low, 더 깊은 추론이 필요할 땐 high로 올리면 돼.", "Default is medium. Use low for faster drafts, and high when deeper reasoning is needed.")}
-                    </p>
                   </div>
                 </div>
               </div>
 
               <button
-                onClick={() => setStatus(AppStatus.CHARACTER_SELECT)}
+                onClick={() => setStatus(AppStatus.STYLE_SELECT)}
                 disabled={!canProceedMissionSetup}
                 className="w-full py-6 font-black text-lg md:text-xl bg-black text-white hover:bg-blue-600 transition-all uppercase italic shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               >
-                <User className="w-6 h-6" /> {ui("다음: 캐릭터 설정", "Next: Character Setup")} <ArrowRight />
+                <Palette className="w-6 h-6" /> {ui("다음: 그림체 선택", "Next: Choose Art Style")} <ArrowRight />
               </button>
             </div>
           </div>
@@ -5052,9 +5622,6 @@ const App: React.FC = () => {
                   <h4 className="text-sm font-black text-blue-800 uppercase flex items-center gap-2 mb-1">
                     <Settings2 size={16} /> {ui("페이지 길이", "Page Length")}
                   </h4>
-                  <p className="text-[10px] font-bold text-blue-600/70 uppercase">
-                    {isI2VSelected ? ui("프레임 전체 길이를 조정해.", "Adjust the total frame length.") : ui("만화의 전체 길이를 조정해.", "Adjust the total comic length.")}
-                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex bg-white border-2 border-black overflow-hidden">
@@ -5108,9 +5675,6 @@ const App: React.FC = () => {
                   <button onClick={handleGeneratePlan} className="bg-black text-white px-4 py-2 text-xs font-black hover:bg-blue-700 transition-colors flex items-center gap-2">{ui("다시 플랜", "Replan")} <RotateCcw size={12} /></button>
                 </div>
               </div>
-              <p className="text-[10px] font-bold text-blue-600/70 mt-3 uppercase">
-                {ui("팁: 페이지 수가 클수록 플랜/생성 시간이 늘어나.", "Tip: More pages mean longer planning and generation time.")}
-              </p>
             </div>
 
             <div className="space-y-4 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -5177,6 +5741,11 @@ const App: React.FC = () => {
                     <span className="border-2 border-black bg-slate-50 px-2 py-1">
                       {readerModeSummary}
                     </span>
+                    {failedUnitCount > 0 ? (
+                      <span className="border-2 border-red-500 bg-red-50 px-2 py-1 text-red-700">
+                        {failedUnitCount} {isI2VSelected ? ui("프레임 실패", "frame failed") : ui("페이지 실패", "page failed")}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -5238,7 +5807,6 @@ const App: React.FC = () => {
                     {seriesPlan && (
                       <div className="border-2 border-black bg-slate-50 p-3">
                         <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("결과 언어", "Output language")}</p>
-                        <p className="text-[10px] font-bold text-slate-500 mb-2">{ui("말풍선과 설명 텍스트의 언어야.", "Language for bubbles and text.")}</p>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             onClick={() => switchPlanLanguage("ko")}
@@ -5260,7 +5828,6 @@ const App: React.FC = () => {
 
                     <div className="border-2 border-black bg-slate-50 p-3">
                       <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("해상도", "Resolution")}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mb-2">{ui("클수록 선명하지만 생성 시간이 늘어.", "Higher is sharper but slower.")}</p>
                       <div className="grid grid-cols-3 gap-2">
                         {IMAGE_SIZE_OPTIONS.map((size) => (
                           <button
@@ -5279,7 +5846,6 @@ const App: React.FC = () => {
 
                     <div className="border-2 border-black bg-slate-50 p-3">
                       <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("이미지 품질", "Image quality")}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mb-2">{ui("높을수록 더 공들여 그리지만 느려질 수 있어.", "Higher quality may look better but can be slower.")}</p>
                       <div className="grid grid-cols-3 gap-2">
                         {(["low", "medium", "high"] as CodexImageQuality[]).map((quality) => (
                           <button
@@ -5297,7 +5863,6 @@ const App: React.FC = () => {
 
                     <div className="border-2 border-black bg-slate-50 p-3">
                       <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("보기 방식", "Viewing mode")}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mb-2">{ui("결과를 이미지 중심으로 볼지, 장면 텍스트도 함께 볼지 정해.", "Choose image-only or include scene text.")}</p>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
@@ -5320,9 +5885,6 @@ const App: React.FC = () => {
                   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
                     <div className="border-2 border-black bg-white p-3 lg:col-span-2">
                       <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("이미지 생성 방식", "Image generation")}</p>
-                      <p className="text-[10px] font-bold text-slate-500">
-                        {ui("현재는 Codex 로그인 세션으로 GPT 이미지 툴을 실행해.", "Currently uses the Codex login session with GPT image tools.")}
-                      </p>
                       <p className="text-xs font-black text-slate-800 mt-2">{currentImageEngineLabel}</p>
                     </div>
 
@@ -5369,7 +5931,6 @@ const App: React.FC = () => {
                         title={ui("Codex 앱에서 생성할 수 있는 프롬프트/레퍼런스 묶음을 ZIP으로 내보내기", "Export a prompt/reference ZIP for use in Codex")}
                       >
                         <span className="flex items-center gap-2">{isExportingCodexHandoff ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />} {ui("Codex 전달 묶음", "Codex handoff")}</span>
-                        <span className="mt-1 block text-[10px] font-bold text-slate-500 normal-case">{ui("프롬프트와 레퍼런스 ZIP", "Prompt/reference ZIP")}</span>
                       </button>
                     )}
                   </div>
@@ -5380,25 +5941,49 @@ const App: React.FC = () => {
             <div className="border-2 border-black bg-yellow-50 px-4 py-3 text-[10px] font-bold text-slate-600">
               <span className="font-black text-slate-900">{ui("현재 설정", "Current settings")}: </span>
               {imageSizeSummary} · {imageQualitySummary} · {currentImageEngineLabel}
-              <span className="ml-1">
-                {ui("설정을 바꾸면 기존 이미지는 유지되고, 필요한 페이지만 다시 그릴 수 있어.", "Changing settings keeps existing images; you can redraw only the pages that need it.")}
-              </span>
             </div>
 
-            {showNarrativeText && (
-              <div className="border-2 border-black bg-blue-50 px-4 py-3 text-[10px] font-bold text-slate-700">
-                {ui("장면 텍스트 포함 모드에서는 각 컷의 상황 설명과 대사를 함께 읽을 수 있어.", "Scene Text mode lets you read each cut's scene description and dialogue alongside the image.")}
+            {failedUnitCount > 0 ? (
+              <div className="border-4 border-red-500 bg-red-50 p-4 md:p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase text-red-700 flex items-center gap-2">
+                      <AlertTriangle size={15} /> {isI2VSelected ? ui("일부 프레임 생성 실패", "Some frames failed") : ui("일부 페이지 생성 실패", "Some pages failed")}
+                    </p>
+                    <p className="mt-2 text-[10px] font-bold text-red-800">
+                      {ui("이미 만든 결과는 유지했어. 실패한 항목만 다시 생성하거나 건너뛰고 계속 만들 수 있어.", "Existing results are preserved. Redraw only the failed item or skip ahead.")}
+                    </p>
+                  </div>
+                  {pageResults.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={downloadAllPagesAsZip}
+                      disabled={isDownloadingZip}
+                      className={`px-4 py-2 border-2 border-black text-[10px] font-black uppercase flex items-center gap-2 ${isDownloadingZip ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"}`}
+                    >
+                      {isDownloadingZip ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                      {ui("현재까지 ZIP", "ZIP so far")}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {pageErrorEntries.map((entry) => (
+                    <div key={`page_error_banner_${entry.pageIndex}`} className="border-2 border-red-300 bg-white p-3 text-left">
+                      <p className="text-[10px] font-black uppercase text-red-700">
+                        {unitLabel} {entry.pageIndex}
+                      </p>
+                      <p className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap text-[10px] font-bold text-slate-700">{entry.message}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            ) : null}
 
             <div className="bg-white border-4 border-black p-4 md:p-6 comic-shadow">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
                 <div>
                   <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-2">
                     <UserCheck size={14} /> {ui("캐릭터 일관성 참고 이미지(선택)", "Character Consistency References (Optional)")}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500 mt-1">
-                    {ui("저장본을 로드한 뒤에도 여기서 레퍼런스 사진을 추가/수정할 수 있어. 다음 페이지 생성부터 반영돼.", "You can add or edit reference photos here after loading a saved project. They apply from the next generated page.")}
                   </p>
                 </div>
                 <p className="text-[10px] font-black uppercase text-slate-500">
@@ -5412,69 +5997,32 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {cast.map((c) => {
-                    const refCount = (c.reference_images || []).length;
-                    const roleLabel = c.role === "protagonist" ? ui("주연", "PROTAGONIST") : ui("조연", "SUPPORTING");
-                    const displayName = String(c.name || "").trim() || (c.role === "protagonist" ? ui("주인공", "Protagonist") : ui("조연", "Supporting"));
-                    const inputId = `ready-cast-img-${c.id}`;
+	                  {cast.map((c) => {
+	                    const roleLabel = c.role === "protagonist" ? ui("주연", "PROTAGONIST") : ui("조연", "SUPPORTING");
+	                    const displayName = String(c.name || "").trim() || (c.role === "protagonist" ? ui("주인공", "Protagonist") : ui("조연", "Supporting"));
+	                    const inputId = `ready-cast-img-${c.id}`;
 
-                    return (
-                      <div key={`${c.id}_ready_refs`} className="border-2 border-black bg-slate-50 p-3">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <p className="text-[10px] font-black uppercase text-slate-700 truncate">
-                            {roleLabel} · {displayName}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-500">
-                            {refCount}/{MAX_REF_IMAGES_PER_CHARACTER}
-                          </p>
-                        </div>
+	                    return (
+	                      <div key={`${c.id}_ready_refs`} className="border-2 border-black bg-slate-50 p-3">
+	                        <div className="flex items-center justify-between gap-2 mb-2">
+	                          <p className="text-[10px] font-black uppercase text-slate-700 truncate">
+	                            {roleLabel} · {displayName}
+	                          </p>
+	                        </div>
 
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          id={inputId}
-                          className="hidden"
-                          disabled={status === AppStatus.GENERATING_PANELS}
-                          onChange={(e) => {
-                            void addReferenceImages(c.id, e.target.files);
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                        <label
-                          htmlFor={inputId}
-                          className={`inline-flex items-center gap-2 px-3 py-2 border-2 border-black text-[10px] font-black uppercase ${status === AppStatus.GENERATING_PANELS ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-blue-50 cursor-pointer"
-                            }`}
-                        >
-                          <Upload size={12} /> {ui("사진 추가", "Add Photos")}
-                        </label>
-
-                        {refCount > 0 ? (
-                          <div className="mt-3 grid grid-cols-4 gap-2">
-                            {(c.reference_images || []).map((url, idx) => (
-                              <div key={`${c.id}_ready_${idx}`} className="relative border-2 border-black bg-white overflow-hidden aspect-square">
-                                <img src={url} alt={`${displayName} reference ${idx + 1}`} className="w-full h-full object-cover" />
-                                <button
-                                  type="button"
-                                  onClick={() => removeReferenceImage(c.id, idx)}
-                                  disabled={status === AppStatus.GENERATING_PANELS}
-                                  className={`absolute top-1 right-1 border-2 border-black p-1 ${status === AppStatus.GENERATING_PANELS ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"
-                                    }`}
-                                  title={ui("삭제", "Remove")}
-                                >
-                                  <Trash2 size={10} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-[10px] font-bold text-slate-500">
-                            {ui("사진이 없어도 생성 가능하지만, 넣으면 캐릭터 일관성이 좋아져.", "Generation works without photos, but they improve character consistency.")}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
+	                        {renderCharacterReferenceControls(c, {
+	                          inputId,
+	                          displayName,
+	                          altFallback: "character",
+	                          panelClassName: "bg-transparent",
+	                          titleClassName: "sr-only",
+	                          countClassName: "text-[10px] font-bold text-slate-500",
+	                          uploadDisabled: status === AppStatus.GENERATING_PANELS,
+	                          compact: true
+	                        })}
+	                      </div>
+	                    );
+	                  })}
                 </div>
               )}
             </div>
@@ -5487,7 +6035,7 @@ const App: React.FC = () => {
                       <p className="text-[10px] font-black uppercase text-emerald-700">{ui("웹툰 리더", "Webtoon Reader")}</p>
                       <h4 className="text-xl md:text-2xl font-black uppercase italic mt-1">{ui("연속 세로 리더", "Continuous Scroll Reader")}</h4>
                       <p className="mt-2 text-[10px] md:text-xs font-bold text-slate-500">
-                        {ui("웹툰은 카드 미리보기 대신 회차형 세로 스크롤로 조립돼.", "Webtoon output is assembled as a vertical episode reader instead of cards.")} {generatedPageCount}/{seriesPlan?.pages.length || 0}
+                        {generatedPageCount}/{seriesPlan?.pages.length || 0}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -5511,10 +6059,7 @@ const App: React.FC = () => {
 
                 <div className="bg-white border-4 border-black p-4 md:p-6 comic-shadow">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-500">{ui("페이지 컨트롤", "Page Controls")}</p>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{ui("각 페이지의 생성, 수정, 재생성은 여기서 관리해.", "Manage generation, editing, and redraw for each page here.")}</p>
-                    </div>
+                    <p className="text-[10px] font-black uppercase text-slate-500">{ui("페이지 컨트롤", "Page Controls")}</p>
                     <p className="text-[10px] font-black uppercase text-slate-500">
                       Segments {webtoonEpisodeResult?.segment_urls.length || 0}
                       {webtoonEpisodeResult ? ` · ${webtoonEpisodeResult.total_height_estimate.toLocaleString()}px` : ""}
@@ -5522,9 +6067,13 @@ const App: React.FC = () => {
                   </div>
                   <div className="space-y-3">
                     {seriesPlan?.pages.map((p) => {
-                      const res = pageResultsMap.get(p.page.index);
-                      const isCur = isProcessingPageIndex === p.page.index;
-                      const editedAt = pageScriptEditedAt[p.page.index] || 0;
+	                      const res = pageResultsMap.get(p.page.index);
+	                      const isCur = isProcessingPageIndex === p.page.index;
+	                      const pageError = pageErrors[p.page.index] || "";
+	                      const nextAfterFailedPage = pageError
+	                        ? seriesPlan?.pages.find((candidate) => candidate.page.index > p.page.index && !pageResultsMap.has(candidate.page.index) && !pageErrors[candidate.page.index]) || null
+	                        : null;
+	                      const editedAt = pageScriptEditedAt[p.page.index] || 0;
                       const styleEditedAt = pageStyleEditedAt[p.page.index] || 0;
                       const renderedAt = pageRenderedAt[p.page.index] || 0;
                       const renderedImageSize = pageRenderedImageSize[p.page.index] || null;
@@ -5550,9 +6099,12 @@ const App: React.FC = () => {
                                 {pageStyleOverrides[p.page.index] ? (
                                   <span className="bg-purple-200 text-black border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase">{ui("스타일", "Style")}</span>
                                 ) : null}
-                                {needsRedraw ? (
-                                  <span className="bg-red-500 text-white border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase">{ui("재생성 필요", "Redraw")}</span>
-                                ) : null}
+	                                {needsRedraw ? (
+	                                  <span className="bg-red-500 text-white border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase">{ui("재생성 필요", "Redraw")}</span>
+	                                ) : null}
+	                                {pageError ? (
+	                                  <span className="bg-red-50 text-red-700 border-2 border-red-500 px-2 py-0.5 text-[9px] font-black uppercase">{ui("실패", "Failed")}</span>
+	                                ) : null}
                                 {renderedImageSize ? (
                                   <span className={`border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase ${needsResolutionRedraw ? "bg-amber-200 text-black" : "bg-white text-slate-700"}`}>
                                     {renderedImageSize}
@@ -5609,9 +6161,38 @@ const App: React.FC = () => {
                                 </button>
                               )}
                             </div>
-                          </div>
+	                          </div>
 
-                          {showNarrativeText ? (
+	                          {pageError ? (
+	                            <div className="mt-3 border-2 border-red-400 bg-red-50 p-3">
+	                              <p className="text-[10px] font-black uppercase text-red-700 flex items-center gap-2">
+	                                <AlertTriangle size={12} /> {unitLabel} {p.page.index} {ui("생성 실패", "generation failed")}
+	                              </p>
+	                              <p className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap text-[10px] font-bold text-slate-700">{pageError}</p>
+	                              <div className="mt-3 flex flex-wrap gap-2">
+	                                <button
+	                                  type="button"
+	                                  onClick={() => generatePage(p.page.index)}
+	                                  disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                  className={`px-3 py-2 border-2 border-black text-[10px] font-black uppercase ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-red-600 text-white hover:bg-red-700"}`}
+	                                >
+	                                  {ui("이 항목 다시 생성", "Retry this item")}
+	                                </button>
+	                                {nextAfterFailedPage ? (
+	                                  <button
+	                                    type="button"
+	                                    onClick={() => generatePage(nextAfterFailedPage.page.index)}
+	                                    disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                    className={`px-3 py-2 border-2 border-black text-[10px] font-black uppercase ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"}`}
+	                                  >
+	                                    {ui("건너뛰고 다음", "Skip to next")} {unitLabel} {nextAfterFailedPage.page.index}
+	                                  </button>
+	                                ) : null}
+	                              </div>
+	                            </div>
+	                          ) : null}
+
+	                          {showNarrativeText ? (
                             <div className="mt-3 border-t-2 border-dashed border-black pt-3">
                               <PageNarrativePreview page={p} compact uiLanguage={uiLanguage} />
                             </div>
@@ -5633,11 +6214,10 @@ const App: React.FC = () => {
                     </p>
                   </div>
 
-                  {generatedPageCount === 0 ? (
-                    <div className="p-8 md:p-12 bg-slate-50 text-center">
-                      <p className="text-sm font-black uppercase text-slate-700">{ui("웹툰 리더 대기 중", "Webtoon Reader Waiting")}</p>
-                      <p className="mt-2 text-[10px] font-bold text-slate-500">{ui("첫 페이지를 생성하면 연속 세로 리더가 여기에서 조립돼.", "Generate the first page and the vertical reader will assemble here.")}</p>
-                      {nextPendingPage ? (
+	                  {generatedPageCount === 0 ? (
+	                    <div className="p-8 md:p-12 bg-slate-50 text-center">
+	                      <p className="text-sm font-black uppercase text-slate-700">{ui("웹툰 리더 대기 중", "Webtoon Reader Waiting")}</p>
+	                      {nextPendingPage ? (
                         <button
                           type="button"
                           onClick={() => generatePage(nextPendingPage.page.index)}
@@ -5711,10 +6291,14 @@ const App: React.FC = () => {
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   {seriesPlan?.pages.map((p, idx) => {
-                    const res = pageResultsMap.get(p.page.index);
-                    const isCur = isProcessingPageIndex === p.page.index;
-                    const isRedrawing = Boolean(res) && isCur;
-                    const editedAt = pageScriptEditedAt[p.page.index] || 0;
+	                    const res = pageResultsMap.get(p.page.index);
+	                    const isCur = isProcessingPageIndex === p.page.index;
+	                    const isRedrawing = Boolean(res) && isCur;
+	                    const pageError = pageErrors[p.page.index] || "";
+	                    const nextAfterFailedPage = pageError
+	                      ? seriesPlan?.pages.find((candidate) => candidate.page.index > p.page.index && !pageResultsMap.has(candidate.page.index) && !pageErrors[candidate.page.index]) || null
+	                      : null;
+	                    const editedAt = pageScriptEditedAt[p.page.index] || 0;
                     const styleEditedAt = pageStyleEditedAt[p.page.index] || 0;
                     const hasStyleOverride = Boolean(pageStyleOverrides[p.page.index]);
                     const renderedAt = pageRenderedAt[p.page.index] || 0;
@@ -5746,11 +6330,16 @@ const App: React.FC = () => {
                                 {ui("스타일", "Style")}
                               </span>
                             ) : null}
-                            {needsRedraw ? (
-                              <span className="bg-red-500 text-white border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase">
-                                {ui("재생성 필요", "Redraw")}
-                              </span>
-                            ) : null}
+	                            {needsRedraw ? (
+	                              <span className="bg-red-500 text-white border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase">
+	                                {ui("재생성 필요", "Redraw")}
+	                              </span>
+	                            ) : null}
+	                            {pageError ? (
+	                              <span className="bg-red-50 text-red-700 border-2 border-red-500 px-2 py-0.5 text-[9px] font-black uppercase">
+	                                {ui("실패", "Failed")}
+	                              </span>
+	                            ) : null}
                             {renderedImageSize ? (
                               <span className={`border-2 border-black px-2 py-0.5 text-[9px] font-black uppercase ${needsResolutionRedraw ? "bg-amber-200 text-black" : "bg-white text-slate-700"}`}>
                                 {renderedImageSize}
@@ -5775,11 +6364,11 @@ const App: React.FC = () => {
                             {res && (
                               <>
                                 <button onClick={() => downloadImage(res.composed_image_url, p.page.index)} className="bg-blue-500 text-white px-2 py-0.5 text-[9px] hover:bg-blue-400"><Download size={10} /></button>
-                                <button
-                                  onClick={() => generatePage(p.page.index)}
-                                  disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
-                                  className={`px-2 py-0.5 text-[9px] ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white text-black hover:bg-yellow-400"
-                                    }`}
+	                                <button
+	                                  onClick={() => generatePage(p.page.index)}
+	                                  disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                  className={`px-2 py-0.5 text-[9px] ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white text-black hover:bg-yellow-400"
+	                                    }`}
                                   title={isCur ? ui("재생성 중...", "Redrawing...") : isI2VSelected ? ui("이 프레임 재생성", "Redraw this frame") : ui("이 페이지 재생성", "Redraw this page")}
                                 >
                                   {isCur ? (
@@ -5788,11 +6377,22 @@ const App: React.FC = () => {
                                       {ui("재생성 중", "Redrawing")}
                                     </span>
                                   ) : (
-                                    ui("재생성", "Redraw")
-                                  )}
-                                </button>
-                              </>
-                            )}
+	                                    ui("재생성", "Redraw")
+	                                  )}
+	                                </button>
+	                                {pageError && nextAfterFailedPage ? (
+	                                  <button
+	                                    type="button"
+	                                    onClick={() => generatePage(nextAfterFailedPage.page.index)}
+	                                    disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                    className={`px-2 py-0.5 text-[9px] ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white text-black hover:bg-slate-200"}`}
+	                                    title={`${ui("건너뛰고 다음", "Skip to next")} ${unitLabel} ${nextAfterFailedPage.page.index}`}
+	                                  >
+	                                    {ui("다음", "Next")}
+	                                  </button>
+	                                ) : null}
+	                              </>
+	                            )}
                           </div>
                         </div>
                         <div className={`relative ${previewAspectClass} bg-slate-100 overflow-hidden`}>
@@ -5806,14 +6406,22 @@ const App: React.FC = () => {
                                   <p className="text-[10px] font-bold text-slate-500 mt-2 uppercase">{ui("재생성 중...", "Redrawing...")}</p>
                                 </div>
                               )}
-                              {(needsResolutionRedraw || needsEngineRedraw) && !isRedrawing ? (
-                                <div className="absolute left-3 bottom-3 border-2 border-black bg-amber-200 px-2 py-1 text-[9px] font-black uppercase text-black">
-                                  {needsResolutionRedraw ? `${renderedImageSize} -> ${imageSize}` : renderedEngineLabel} {ui("재생성 필요", "redraw needed")}
-                                </div>
-                              ) : null}
-                            </>
-                          ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+	                              {(needsResolutionRedraw || needsEngineRedraw) && !isRedrawing ? (
+	                                <div className="absolute left-3 bottom-3 border-2 border-black bg-amber-200 px-2 py-1 text-[9px] font-black uppercase text-black">
+	                                  {needsResolutionRedraw ? `${renderedImageSize} -> ${imageSize}` : renderedEngineLabel} {ui("재생성 필요", "redraw needed")}
+	                                </div>
+	                              ) : null}
+	                              {pageError && !isRedrawing ? (
+	                                <div className="absolute inset-x-3 top-3 border-2 border-red-500 bg-red-50 p-3 text-left shadow-lg">
+	                                  <p className="text-[10px] font-black uppercase text-red-700 flex items-center gap-2">
+	                                    <AlertTriangle size={12} /> {ui("재생성 실패", "Redraw failed")}
+	                                  </p>
+	                                  <p className="mt-1 line-clamp-3 text-[10px] font-bold text-slate-700">{pageError}</p>
+	                                </div>
+	                              ) : null}
+	                            </>
+	                          ) : (
+	                            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
                               {isCur ? (
                                 <div className="flex flex-col items-center">
                                   <Loader2 className="animate-spin text-blue-600 w-12 h-12 mb-4" />
@@ -5822,18 +6430,38 @@ const App: React.FC = () => {
                                     {ui("렌더링", "Rendering")} {seriesPlan?.series_spec.series.language === "en" ? "English" : "Hangul"}
                                   </p>
                                 </div>
-                              ) : (
-                                <button
-                                  onClick={() => generatePage(p.page.index)}
-                                  disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
-                                  className={`px-8 py-4 border-4 border-black font-black uppercase italic shadow-lg transition-transform ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-blue-600 text-white hover:scale-110"
-                                    }`}
-                                >
-                                  {autoGeneratePages ? ui("자동 대기 중...", "Auto Queue...") : isI2VSelected ? ui("프레임 생성", "Generate Frame") : ui("페이지 생성", "Generate Page")}
-                                </button>
-                              )}
-                            </div>
-                          )}
+	                              ) : (
+	                                <div className="flex flex-col items-center gap-3">
+	                                  {pageError ? (
+	                                    <div className="border-2 border-red-500 bg-red-50 p-3 text-left">
+	                                      <p className="text-[10px] font-black uppercase text-red-700 flex items-center gap-2">
+	                                        <AlertTriangle size={12} /> {ui("생성 실패", "Generation failed")}
+	                                      </p>
+	                                      <p className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap text-[10px] font-bold text-slate-700">{pageError}</p>
+	                                    </div>
+	                                  ) : null}
+	                                  <button
+	                                    onClick={() => generatePage(p.page.index)}
+	                                    disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                    className={`px-8 py-4 border-4 border-black font-black uppercase italic shadow-lg transition-transform ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-300 text-slate-600 cursor-not-allowed" : pageError ? "bg-red-600 text-white hover:bg-red-700" : "bg-blue-600 text-white hover:scale-110"
+	                                      }`}
+	                                  >
+	                                    {autoGeneratePages ? ui("자동 대기 중...", "Auto Queue...") : pageError ? ui("다시 생성", "Retry") : isI2VSelected ? ui("프레임 생성", "Generate Frame") : ui("페이지 생성", "Generate Page")}
+	                                  </button>
+	                                  {pageError && nextAfterFailedPage ? (
+	                                    <button
+	                                      type="button"
+	                                      onClick={() => generatePage(nextAfterFailedPage.page.index)}
+	                                      disabled={Boolean(isProcessingPageIndex) || autoGeneratePages}
+	                                      className={`px-4 py-2 border-2 border-black text-[10px] font-black uppercase ${Boolean(isProcessingPageIndex) || autoGeneratePages ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-white hover:bg-slate-100"}`}
+	                                    >
+	                                      {ui("건너뛰고 다음", "Skip to next")} {unitLabel} {nextAfterFailedPage.page.index}
+	                                    </button>
+	                                  ) : null}
+	                                </div>
+	                              )}
+	                            </div>
+	                          )}
                         </div>
                         <div className={`p-4 border-t-2 border-black bg-slate-50 ${showNarrativeText ? "" : "min-h-[80px]"}`}>
                           <p className="text-xs font-bold leading-tight line-clamp-3 italic text-slate-700">"{p.page.chapter_title}"</p>

@@ -145,21 +145,57 @@
   },
   {
     "id": "ghibli_fantasy_art",
-    "category": "Illustration",
-    "label": "지브리풍 · 회화적 배경",
+    "category": "Anime",
+    "label": "일본 극장판 · 회화 판타지",
     "render_mode": "illustration",
-    "style_prompt": "studio ghibli style animation background, gouache painting style, lush green nature, puffy white clouds, detailed painted background, simple character design with clear emotions, nostalgic summer vibe, peaceful atmosphere",
-    "negative_style_prompt": "3d render, plastic, neon, dark gritty, low resolution, ugly",
-    "preview_hint": "아름다운 배경과 감성적인 분위기. 자연/치유/여행 테마."
+    "style_prompt": "Japanese hand-drawn theatrical animation still, painterly gouache background art, soft organic linework, rounded simplified character shapes, low-gloss cel shading on characters, watercolor-like foliage and clouds, warm natural daylight, atmospheric perspective, muted earth greens and sky blues, lived-in environment details, expressive small gestures, calm nostalgic mood, clean readable comic panels, original characters only",
+    "negative_style_prompt": "copied film still, copied character design, logos, exact text, 3d render, plastic surfaces, neon glow, photorealism, generic webtoon gradients, over-sharpened digital finish, excessive manga screentones",
+    "preview_hint": "손그림 극장판처럼 배경이 풍부한 판타지 톤. 자연/치유/여행 주제."
   },
   {
     "id": "retro_90s_anime_cel",
-    "category": "Illustration",
-    "label": "90s 레트로 셀애니",
+    "category": "Anime",
+    "label": "90s 레트로 · 셀애니",
     "render_mode": "illustration",
-    "style_prompt": "retro 1990s anime cel animation look, clean cel shading, slightly warm film tone, subtle analog softness (not blurry), simple highlights, nostalgic color grading, crisp character silhouette, sailor moon / evangelion era aesthetic",
-    "negative_style_prompt": "modern glossy 3D, hyperreal pores, heavy film grain, extreme blur, smeared lines, 4k modern anime",
+    "style_prompt": "1990s Japanese TV cel animation frame, hand-painted cel look, crisp dark outlines, flat color blocks, one or two-step shadow shapes, simple painted background plates, slightly warm analog color timing, subtle cel grain and tiny line jitter without blur, clean character silhouettes, expressive large eyes when genre-appropriate, dramatic close-ups, limited-animation pose clarity, nostalgic broadcast-anime finish, original characters only",
+    "negative_style_prompt": "modern glossy digital anime, 3d render, HDR bloom, hyper-detailed render, heavy film grain, extreme blur, photoreal skin, smooth vector art, AI-polished plastic, generic webtoon gradients",
     "preview_hint": "옛 애니 셀화 느낌의 레트로 감성. 친근하고 ‘추억’ 톤."
+  },
+  {
+    "id": "anime_modern_sky_light",
+    "category": "Anime",
+    "label": "현대 극장판 · 청춘 빛",
+    "render_mode": "illustration",
+    "style_prompt": "Modern Japanese theatrical animation still, realistic contemporary location backgrounds, carefully observed city streets and school interiors, high-detail skies and cloud layers, luminous backlight, soft lens bloom, saturated blue-and-orange color contrast, clean thin character linework, subtle cel shading, translucent reflections on glass and rain puddles, sunbeams and floating dust, cinematic wide compositions mixed with quiet close-ups, wistful youth-drama mood, original characters only",
+    "negative_style_prompt": "copied film still, copied character design, logos, exact text, chibi proportions, heavy ink hatching, gritty noir, 3d render, photoreal photograph, flat vector, dull gray palette, generic webtoon shine",
+    "preview_hint": "하늘, 역광, 도시 배경이 강한 현대 극장판 감성. 청춘/여행/감정선."
+  },
+  {
+    "id": "anime_literary_drama_soft",
+    "category": "Anime",
+    "label": "섬세한 감성 애니 · 문학 드라마",
+    "render_mode": "illustration",
+    "style_prompt": "High-detail Japanese TV animation drama still, elegant thin linework, refined natural anatomy, delicate face shapes, polished hair highlights, soft layered lighting, warm window light and cool shadow balance, ornate interiors or carefully observed everyday rooms, shallow depth-of-field feeling, glowing dust motes, subtle fabric folds, restrained expressions, emotional close-up framing, premium key-animation finish, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, super-deformed comedy faces, loud neon colors, rough sketch, heavy horror shadows, 3d render, photorealism, cheap flat webtoon coloring, overdone sparkles",
+    "preview_hint": "빛과 표정이 섬세한 감성 드라마 톤. 인물 심리/문학/편지/회상."
+  },
+  {
+    "id": "anime_dark_sword_fx",
+    "category": "Anime",
+    "label": "다크 액션 애니 · 검격 이펙트",
+    "render_mode": "illustration",
+    "style_prompt": "Modern Japanese dark action anime still, crisp cel character drawing, dramatic colored rim light, high-contrast night scenes, painterly compositing, glowing elemental sword effects, flame arcs, water arcs, smoke and sparks, dynamic impact frames, motion-smear accents, traditional pattern motifs adapted generically, intense eyes, clean separation between characters and background, cinematic fight choreography, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, flat classroom webtoon, cute pastel romance, static poses, muddy effects, photoreal blood, 3d render, western superhero style, monochrome manga-only output",
+    "preview_hint": "검격, 불꽃, 물결 이펙트가 강한 현대 액션 애니. 전투/모험/위기 장면."
+  },
+  {
+    "id": "anime_graphic_pop_action",
+    "category": "Anime",
+    "label": "그래픽 액션 애니 · 비비드",
+    "render_mode": "illustration",
+    "style_prompt": "High-energy Japanese graphic action anime still, angular geometric shape language, thick expressive linework, neon magenta cyan orange and acid green palette, flat posterized color planes, sharp triangular fire and energy effects, exaggerated foreshortening, explosive diagonal composition, punchy limited shadows, high-contrast silhouettes, kinetic camera perspective, clean typography-free frame, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, muted naturalism, watercolor softness, photorealism, 3d plastic render, gentle slice-of-life pacing, cluttered tiny details, brown-gray palette, generic mobile webtoon look",
+    "preview_hint": "각진 도형과 네온 컬러가 터지는 액션 톤. SF/히어로/폭발적 장면."
   },
   {
     "id": "soft_slice_of_life",
@@ -445,179 +481,179 @@
     "category": "Manga",
     "label": "80년대 액션망가 · 북두의 권",
     "render_mode": "illustration",
-    "style_prompt": "1980s japanese action manga style, Fist of the North Star aesthetic, extremely muscular anatomy, hyper-detailed ink crosshatching, dramatic heavy shadows, explosive impact lines, gritty post-apocalyptic tone, bold thick outlines, intense facial expressions, dynamic power poses, screentone shading, vintage manga paper texture",
-    "negative_style_prompt": "cute, pastel, soft, modern digital, chibi, simple lines, flat colors, western comic",
-    "preview_hint": "근육질 캐릭터와 강렬한 명암. 80년대 하드보일드 액션의 정수."
+    "style_prompt": "1980s Japanese hard-boiled action manga visual grammar, heroic muscular anatomy, square jaws and stern eyes, thick confident ink outlines, dense cross-hatching on bodies and rubble, very heavy black shadow masses, explosive impact lines, cracked wasteland backgrounds, dramatic low-angle power poses, intense facial strain, vintage print-paper texture, clear panel readability, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, named costumes, cute chibi faces, pastel softness, glossy modern anime, flat webtoon gradients, photoreal skin, western superhero spandex",
+    "preview_hint": "북두의 권을 떠올리기 쉬운 80년대 하드보일드 액션. 근육, 먹선, 폭발적 명암."
   },
   {
     "id": "manga_80s_mecha",
     "category": "Manga",
-    "label": "80년대 메카닉 · 건담",
+    "label": "80년대 메카닉 · 건담/마크로스",
     "render_mode": "illustration",
-    "style_prompt": "1980s japanese mecha manga style, Gundam and Macross aesthetic, highly detailed mechanical parts, precise linework, technical hatching, space battle scenes, retro sci-fi color palette, dramatic cockpit angles, metallic reflections rendered in ink, vintage anime cel shading influence, starfield backgrounds",
-    "negative_style_prompt": "organic, cute, fantasy, watercolor, simple, flat, modern glossy 3D",
-    "preview_hint": "정교한 로봇 디테일과 우주 전투. 80년대 SF 메카물 감성."
+    "style_prompt": "1980s Japanese real-robot mecha manga and cel-anime visual grammar, angular humanoid machines, precise mechanical panel lines, visible vents thrusters joints and armor plates, technical hatching, cockpit close-ups, starfield or hangar backgrounds, restrained retro sci-fi palette, metallic shine suggested by ink and cel highlights, missile trails and beam effects, original mecha designs only",
+    "negative_style_prompt": "copied mobile suit design, logos, exact text, recognizable franchise armor, organic fantasy creature, cute mascot robot, smooth modern 3D render, toy plastic finish, watercolor softness, simple flat shapes",
+    "preview_hint": "건담/마크로스처럼 정교한 80년대 SF 메카 감각. 장갑선, 조종석, 우주 전투."
   },
   {
     "id": "manga_90s_battle",
     "category": "Manga",
-    "label": "90년대 배틀망가 · 소년점프",
+    "label": "90년대 배틀 · 드래곤볼/슬램덩크",
     "render_mode": "illustration",
-    "style_prompt": "1990s japanese shonen battle manga style, Dragon Ball and Slam Dunk aesthetic, dynamic speed lines, energetic action poses, bold clean outlines, screentone gradients, expressive exaggerated reactions, powerful ki/aura energy effects, high contrast black and white with occasional tone, manga panel composition with dramatic angles",
-    "negative_style_prompt": "realistic, painterly, muted colors, static poses, western comic, soft shading, watercolor",
-    "preview_hint": "드래곤볼·슬램덩크 느낌의 역동적인 배틀 액션. 소년만화의 왕도."
+    "style_prompt": "1990s Japanese shonen battle manga visual grammar, bold clean outlines, elastic athletic anatomy, explosive speed lines, dust clouds, sharp reaction close-ups, exaggerated shouting faces, compressed action poses, impact stars and aura-like energy fields, clear black-and-white values with screentone gradients, dramatic tournament and court-like staging when relevant, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, named uniforms, photorealism, painterly rendering, muted art-house colors, static poses, western comic rendering, soft romance shading",
+    "preview_hint": "드래곤볼/슬램덩크식 90년대 소년 에너지. 속도선, 리액션, 강한 동작."
   },
   {
     "id": "manga_90s_shoujo",
     "category": "Manga",
-    "label": "90년대 순정만화 · 꽃 배경",
+    "label": "90년대 순정 · 세일러문/카드캡터 체리",
     "render_mode": "illustration",
-    "style_prompt": "1990s japanese shoujo manga style, Sailor Moon and Cardcaptor Sakura aesthetic, large sparkling eyes with detailed iris reflections, delicate thin linework, flower petal and sparkle screen effects, flowing hair with detailed strands, dreamy soft-focus backgrounds, ornate costume details, emotional atmosphere, screentone blush effects, romantic composition",
-    "negative_style_prompt": "muscular, gritty, dark horror, rough ink, western comic, heavy shadows, ugly",
-    "preview_hint": "반짝이는 큰 눈과 꽃잎 효과. 90년대 순정만화의 화려한 감성."
+    "style_prompt": "1990s Japanese magical-girl shoujo manga visual grammar, very large sparkling eyes with layered iris highlights, delicate thin linework, long flowing hair strands, elegant hand poses, flower petals ribbons stars and sparkle screen effects, soft-focus empty backgrounds, graceful transformation-like silhouettes without copying costumes, screentone blush, romantic emotional framing, original characters only",
+    "negative_style_prompt": "copied costume design, logos, exact text, recognizable mascot or weapon, muscular gritty action anatomy, dark horror ink, western comic faces, heavy noir shadows, rough dirty linework",
+    "preview_hint": "세일러문/카드캡터 체리를 떠올리는 90년대 순정 감각. 큰 눈, 꽃, 리본, 반짝임."
   },
   {
     "id": "manga_90s_horror",
     "category": "Manga",
     "label": "90년대 공포망가 · 이토 준지",
     "render_mode": "illustration",
-    "style_prompt": "1990s japanese horror manga style, Junji Ito aesthetic, extremely detailed cross-hatching and ink lines, grotesque body horror transformations, spiral and organic patterns, unsettling facial expressions, high contrast black and white, claustrophobic panel compositions, disturbing anatomical distortions, meticulous ink stippling, psychological terror atmosphere",
-    "negative_style_prompt": "colorful, cute, pastel, happy, simple, flat, chibi, bright",
-    "preview_hint": "이토 준지풍의 정교한 공포 표현. 소름 끼치는 잉크 해칭."
+    "style_prompt": "1990s Japanese psychological horror manga visual grammar, meticulous black ink lines, obsessive cross-hatching and stippling, pale anxious faces, claustrophobic panel composition, unsettling organic patterns, warped rooms and shadows, quiet dread before shock, high-contrast monochrome values, disturbing but non-graphic surreal distortions, original characters only",
+    "negative_style_prompt": "copied story image, logos, exact text, graphic gore, colorful cute palette, pastel happiness, simple flat chibi, glossy anime shine, comedic expression, cheerful classroom webtoon",
+    "preview_hint": "이토 준지를 떠올리기 쉬운 정교한 공포망가 톤. 해칭, 불안한 얼굴, 폐쇄감."
   },
   {
     "id": "manga_2000s_shonen",
     "category": "Manga",
-    "label": "2000년대 소년망가 · 나루토",
+    "label": "2000년대 소년 · 나루토/블리치",
     "render_mode": "illustration",
-    "style_prompt": "2000s japanese shonen manga style, Naruto and Bleach aesthetic, refined action sequences, dynamic ninja-style movement, detailed costume and weapon designs, clean bold outlines with moderate screentone, dramatic perspective shots, energy effect lines, expressive character poses, slightly more refined than 90s with better anatomy proportions",
-    "negative_style_prompt": "realistic photograph, oil painting, pastel cute, static, vintage retro, western",
-    "preview_hint": "나루토·블리치 세대의 세련된 소년만화. 닌자풍 액션과 드라마."
+    "style_prompt": "2000s Japanese shonen action manga visual grammar, cleaner anatomy than 1990s, sharp youthful faces, tactical movement poses, flowing coats scarves or gear silhouettes without copying uniforms, weapons and hand-gesture action staged clearly, moderate screentone, crisp speed arcs, dramatic perspective, emotional rivalry close-ups, stylish black fill shapes, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, named village symbols, recognizable swords or uniforms, photoreal photograph, oil painting, pastel cute tone, static staging, vintage 80s roughness, western comic style",
+    "preview_hint": "나루토/블리치식 2000년대 소년 액션. 날렵한 인체, 기술 동작, 라이벌 구도."
   },
   {
     "id": "manga_2000s_romance",
     "category": "Manga",
-    "label": "2000년대 순정 · 소녀만화",
+    "label": "2000년대 순정 · 후르츠 바스켓/오란고교",
     "render_mode": "illustration",
-    "style_prompt": "2000s japanese shoujo romance manga style, Fruits Basket and Ouran aesthetic, clean delicate linework, elegant character proportions, soft screentone shading, sparkle and flower overlay effects, bishonen male characters, expressive emotional scenes, school uniform details, gentle atmospheric backgrounds, tender romantic composition",
-    "negative_style_prompt": "action, battle, gritty, rough, horror, heavy shadows, muscular",
-    "preview_hint": "깔끔한 선과 부드러운 톤. 2000년대 소녀만화의 섬세한 로맨스."
+    "style_prompt": "2000s Japanese shoujo school-romance manga visual grammar, clean delicate linework, slim elegant proportions, soft screentone gradients, gentle flower and sparkle overlays, expressive downcast eyes and shy smiles, polished school-life interiors, neat uniforms adapted generically, tender spacing between characters, emotional close-up panels, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, named school emblems, action battle posing, gritty rough ink, horror lighting, heavy muscular anatomy, loud neon palette, slapstick distortion unless requested",
+    "preview_hint": "후르츠 바스켓/오란고교 쪽의 2000년대 순정. 부드러운 톤, 미형, 학원 로맨스."
   },
   {
     "id": "manga_2000s_seinen",
     "category": "Manga",
-    "label": "2000년대 청년만가 · 데스노트",
+    "label": "2000년대 청년 · 데스노트/바가본드",
     "render_mode": "illustration",
-    "style_prompt": "2000s japanese seinen manga style, Death Note and Vagabond aesthetic, highly realistic character proportions, detailed facial features, dramatic chiaroscuro lighting, meticulous background art, psychological tension in composition, precise clean lines with detailed screentone, mature sophisticated art direction, cinematic panel layouts",
-    "negative_style_prompt": "chibi, cute, pastel, simple, childish, flat colors, cartoony",
-    "preview_hint": "데스노트·바가본드급 정교함. 사실적 비율과 심리적 긴장감."
+    "style_prompt": "2000s Japanese seinen suspense manga visual grammar, realistic mature proportions, detailed facial planes, controlled thin-to-medium ink lines, dramatic chiaroscuro lighting, meticulous interior or historical background detail, psychological tension in negative space, elegant cinematic panel layouts, restrained gestures, serious eye contact, refined screentone and brush texture, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable notebook or historical figure, chibi, cute pastel tone, childish cartoon faces, flat webtoon color, slapstick comedy, glossy idol styling",
+    "preview_hint": "데스노트/바가본드처럼 정교하고 성숙한 청년만화. 사실적 비율, 긴장감, 명암."
   },
   {
     "id": "manga_2000s_slice",
     "category": "Manga",
-    "label": "2000년대 일상물 · 요츠바랑",
+    "label": "2000년대 일상 · 요츠바랑/아즈망가",
     "render_mode": "illustration",
-    "style_prompt": "2000s japanese slice of life manga style, Yotsuba and Azumanga Daioh aesthetic, clean simple linework, warm cheerful atmosphere, expressive comedic faces, minimal screentone with open white spaces, gentle character proportions, everyday life scenes, bright and airy composition, subtle background details, heartwarming tone",
-    "negative_style_prompt": "dark, horror, complex, gritty, action explosion, heavy shading, dramatic",
-    "preview_hint": "요츠바랑의 밝고 따뜻한 일상. 심플하고 편안한 그림체."
+    "style_prompt": "2000s Japanese slice-of-life comedy manga visual grammar, clean simple linework, open white space, minimal screentone, rounded everyday character proportions, playful small reactions, warm neighborhood or classroom details, bright airy panels, gentle comedic timing, relaxed pacing, ordinary objects drawn clearly, heartwarming low-stakes mood, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, dark horror tone, gritty action explosion, heavy dramatic shading, complex fantasy armor, photorealism, glossy modern webtoon effects",
+    "preview_hint": "요츠바랑/아즈망가처럼 밝은 일상 코미디. 여백, 귀여운 리액션, 편안함."
   },
   {
     "id": "manga_2010s_action",
     "category": "Manga",
     "label": "2010년대 액션 · 진격의 거인",
     "render_mode": "illustration",
-    "style_prompt": "2010s japanese dark fantasy action manga style, Attack on Titan aesthetic, gritty rough line quality, intense dynamic ODM gear action sequences, dramatic wide panel compositions, heavy shadow work, desaturated dark tone, grotesque titan-like creature designs, military uniform details, raw emotional expressions, visceral impact effects",
-    "negative_style_prompt": "cute, pastel, romance, sparkle, soft, simple, bright cheerful",
-    "preview_hint": "진격의 거인풍 다크 판타지. 거칠고 역동적인 전투 연출."
+    "style_prompt": "2010s Japanese dark fantasy survival-action manga visual grammar, gritty rough line quality, heavy shadow work, large oppressive environments, desperate wide panel compositions, kinetic grappling or aerial movement without copying equipment, military-like straps and utility gear adapted generically, raw emotional expressions, giant-scale threat framing, desaturated full-color or harsh monochrome values, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable uniforms or gear, cute pastel romance, sparkly shoujo effects, soft classroom comedy, simple flat color, cheerful slice-of-life mood",
+    "preview_hint": "진격의 거인식 다크 생존 액션. 거친 선, 거대 스케일, 절박한 전투."
   },
   {
     "id": "manga_2010s_fantasy",
     "category": "Manga",
-    "label": "2010년대 이세계 · 판타지",
+    "label": "2010년대 이세계 · 리제로/SAO",
     "render_mode": "illustration",
-    "style_prompt": "2010s japanese isekai fantasy manga style, Re:Zero and Sword Art Online light novel illustration aesthetic, detailed fantasy armor and costume designs, RPG game UI influenced elements, magical effect particles, clean modern linework, screentone and gradient shading mix, epic fantasy landscapes, character status window aesthetic, vibrant atmosphere",
-    "negative_style_prompt": "realistic, gritty, horror, vintage retro, rough sketch, monochrome only",
-    "preview_hint": "이세계·RPG풍 판타지. 화려한 장비와 마법 이펙트."
+    "style_prompt": "2010s Japanese isekai fantasy manga and light-novel illustration visual grammar, clean modern linework, youthful fantasy character proportions, detailed but readable armor robes and adventurer outfits, magic circles and particle effects, RPG-like composition cues without actual UI text, screentone mixed with soft gradient shading, bright fantasy landscapes, emotional hero framing, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable swords or outfits, photorealism, gritty horror, vintage 80s roughness, monochrome-only output, western tabletop illustration, muddy colors",
+    "preview_hint": "리제로/SAO 쪽의 이세계 판타지. 마법 이펙트, 장비, RPG 분위기."
   },
   {
     "id": "manga_2010s_sports",
     "category": "Manga",
     "label": "2010년대 스포츠 · 하이큐",
     "render_mode": "illustration",
-    "style_prompt": "2010s japanese sports manga style, Haikyuu aesthetic, dynamic athletic movement captured mid-action, detailed sweat and motion effects, energetic speed lines, precise anatomy in motion, expressive team dynamics, gymnasium and court environments, dramatic angle shots from below, impactful ball-hitting moments, clean modern linework with bold screentone",
-    "negative_style_prompt": "static, fantasy magic, mecha robot, horror, slow, painterly, soft",
-    "preview_hint": "하이큐처럼 역동적인 스포츠 액션. 땀방울과 속도감이 살아있는 연출."
+    "style_prompt": "2010s Japanese sports manga visual grammar, lean athletic anatomy, dynamic mid-air movement, sweat droplets and motion streaks, gymnasium or court perspective, low-angle shots from the floor, team formation energy, intense eye close-ups before impact, clean modern linework, bold screentone bursts, readable ball trajectory and body mechanics, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable team jerseys, static standing poses, fantasy magic effects, mecha robot elements, horror shadows, slow painterly softness, photoreal sports photography",
+    "preview_hint": "하이큐처럼 탄력 있는 스포츠 연출. 점프, 땀, 팀워크, 강한 카메라 각도."
   },
   {
     "id": "manga_2010s_romance",
     "category": "Manga",
-    "label": "2010년대 로맨스 · 학원물",
+    "label": "2010년대 로맨스 · 아오하라이드",
     "render_mode": "illustration",
-    "style_prompt": "2010s japanese romance manga style, modern school setting, clean refined linework, bishonen and bishoujo character designs, subtle blush effects, elegant uniform details, soft atmospheric backgrounds with light bokeh effect, emotional close-up compositions, gentle screentone gradients, contemporary fashion sense, heartfelt expressions",
-    "negative_style_prompt": "action battle, muscular, horror, rough, gritty, dark shadows, old vintage",
-    "preview_hint": "깔끔한 미형 캐릭터의 학원 로맨스. 세련된 현대 순정풍."
+    "style_prompt": "2010s Japanese school romance manga visual grammar, clean refined linework, soft contemporary character proportions, natural hairstyles, subtle blush and lowered gaze, airy classroom corridors and train-station backgrounds, gentle screentone gradients, light bokeh-like sparkle kept restrained, emotional close-ups with quiet pauses, modern casual fashion and uniforms adapted generically, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, named school uniforms, action battle anatomy, muscular shonen poses, horror ink, rough gritty texture, old vintage cel look, loud slapstick comedy",
+    "preview_hint": "아오하라이드처럼 담백한 학원 로맨스. 조용한 표정, 여백, 현대적인 순정 톤."
   },
   {
     "id": "manga_2020s_action",
     "category": "Manga",
     "label": "2020년대 액션 · 주술회전",
     "render_mode": "illustration",
-    "style_prompt": "2020s japanese action manga style, Jujutsu Kaisen aesthetic, modern stylized dynamic compositions, bold thick expressive lines, creative panel-breaking layouts, cursed energy dark effects, high contrast black fills, contemporary fashion in character designs, fluid martial arts choreography, experimental ink splatter effects, intense close-up expressions",
-    "negative_style_prompt": "cute pastel, retro vintage, simple flat, soft romance, realistic photograph",
-    "preview_hint": "주술회전풍 현대 액션. 세련된 구도와 강렬한 잉크 효과."
+    "style_prompt": "2020s Japanese supernatural action manga visual grammar, bold expressive ink lines, modern streetwear silhouettes adapted generically, fluid martial-arts choreography, black energy smears, abstract curse-like shapes without copying creatures, panel-breaking diagonals, high-contrast black fills, experimental ink splatter, intense close-up expressions, urban night backgrounds, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable uniforms or hand signs, cute pastel romance, retro vintage look, simple flat vector art, realistic photography, clean educational webtoon default",
+    "preview_hint": "주술회전식 현대 초능력 액션. 굵은 선, 도심, 어두운 에너지, 빠른 격투."
   },
   {
     "id": "manga_2020s_dark",
     "category": "Manga",
     "label": "2020년대 다크 · 체인소맨",
     "render_mode": "illustration",
-    "style_prompt": "2020s japanese dark manga style, Chainsaw Man aesthetic, grungy raw line quality, chaotic action compositions, horror-comedy tone, experimental panel layouts, rough textured inking, punk rock aesthetic, urban gritty environments, grotesque creature designs with personality, bold unconventional storytelling visuals, heavy black ink areas",
-    "negative_style_prompt": "clean, cute, polished, sparkle, romance, traditional, conservative layout",
-    "preview_hint": "체인소맨의 그런지하고 실험적인 스타일. 펑크 감성 다크 코미디."
+    "style_prompt": "2020s Japanese dark urban action manga visual grammar, raw grungy line quality, punk attitude, chaotic close-range action, awkward humor mixed with dread, rough textured inking, unconventional off-balance panel layouts, heavy black ink areas, messy apartments alleys and city interiors, monstrous silhouettes designed originally, cinematic pauses before violence, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable weapon-head designs, clean polished shoujo look, cute sparkle romance, conservative panel grid, glossy webtoon shine, cheerful school comedy",
+    "preview_hint": "체인소맨식 그런지 다크 액션. 거친 선, 도시의 피로감, 이상한 유머와 폭발력."
   },
   {
     "id": "manga_2020s_romance",
     "category": "Manga",
-    "label": "2020년대 로맨스 · 트렌디",
+    "label": "2020년대 트렌디 · 비스크돌/최애의 아이",
     "render_mode": "illustration",
-    "style_prompt": "2020s japanese modern romance manga style, My Dress-Up Darling and Oshi no Ko aesthetic, ultra-clean digital linework, trendy fashion-forward character designs, social media influenced composition, soft gradient tones, contemporary hairstyles and accessories, bright and airy atmosphere, detailed eye art with modern sparkle effects, smartphone and pop culture references",
-    "negative_style_prompt": "vintage, old style, rough ink, dark horror, gritty, heavy shadows, monochrome",
-    "preview_hint": "SNS 세대의 트렌디한 로맨스. 최신 패션과 깔끔한 디지털 선."
+    "style_prompt": "2020s Japanese trendy romance and idol-drama manga visual grammar, ultra-clean digital linework, polished modern faces, detailed glossy eye highlights, fashionable contemporary hair and accessories, smartphone-era framing, bright interiors and social-media-like compositions without real UI text, soft gradient tones, stylish outfits adapted generically, emotional sparkle used precisely, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable idol outfits or cosplay, vintage rough ink, dark horror tone, gritty shadows, monochrome-only output, childish chibi default, generic webtoon simplification",
+    "preview_hint": "비스크돌/최애의 아이처럼 최신 트렌디 감성. 패션, 눈 하이라이트, SNS 세대."
   },
   {
     "id": "manga_2020s_comedy",
     "category": "Manga",
     "label": "2020년대 코미디 · 스파이패밀리",
     "render_mode": "illustration",
-    "style_prompt": "2020s japanese comedy action manga style, Spy x Family aesthetic, clean polished linework, charming character expressions, retro-modern spy thriller setting, elegant yet comedic compositions, cute child character with exaggerated reactions, sophisticated costume designs, warm family atmosphere mixed with action, balanced screentone use, accessible and inviting art style",
-    "negative_style_prompt": "horror, grotesque, dark gritty, rough messy lines, monochrome serious, old vintage",
-    "preview_hint": "스파이패밀리의 밝고 귀여운 액션코미디. 온 가족이 즐기는 분위기."
+    "style_prompt": "2020s Japanese family spy-comedy manga visual grammar, clean polished linework, warm retro-modern interiors, charming deadpan and exaggerated childlike reactions, elegant adult silhouettes adapted generically, balanced action and domestic comedy staging, tidy screentone use, readable facial acting, soft family warmth mixed with spy-thriller props, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable family designs or uniforms, grotesque horror, dark gritty mess, monochrome serious drama, old vintage roughness, slapdash webtoon coloring",
+    "preview_hint": "스파이패밀리식 가족 액션코미디. 깔끔한 선, 귀여운 리액션, 레트로 스파이 분위기."
   },
   {
     "id": "manga_chibi_sd",
     "category": "Manga",
-    "label": "치비/SD · 2등신 캐릭터",
+    "label": "치비/SD · 굿즈 애니",
     "render_mode": "illustration",
-    "style_prompt": "japanese chibi super-deformed manga style, 2-3 head proportion characters, oversized expressive heads, tiny cute bodies, exaggerated emotional reactions, simple clean outlines, minimal background details, comedic effect lines, dot eyes or large sparkly eyes, cute rounded forms, kawaii aesthetic, playful energetic poses",
-    "negative_style_prompt": "realistic proportions, detailed anatomy, serious, dark, horror, complex backgrounds",
-    "preview_hint": "2~3등신의 귀여운 캐릭터. 개그·요약·캐릭터 소개에 딱."
+    "style_prompt": "Japanese chibi super-deformed anime goods visual grammar, 2 to 3-head-tall proportions, oversized expressive heads, tiny rounded bodies, simple clean outlines, sticker-like readability, minimal background details, comedic effect marks, dot eyes or simplified sparkly eyes, plush-toy cuteness, playful poses, original characters only",
+    "negative_style_prompt": "copied mascot design, logos, exact text, realistic proportions, detailed anatomy, serious horror mood, complex backgrounds, gritty shadows, photoreal texture, adult seinen faces",
+    "preview_hint": "애니 굿즈처럼 2~3등신으로 귀엽게 줄인 SD 스타일. 캐릭터 소개/개그에 좋음."
   },
   {
     "id": "manga_josei_mature",
     "category": "Manga",
-    "label": "조세이 · 성숙한 로맨스",
+    "label": "조세이 · NANA/파라다이스 키스",
     "render_mode": "illustration",
-    "style_prompt": "japanese josei manga style, Nana and Paradise Kiss aesthetic, mature sophisticated character designs, elegant fashion illustration influence, refined delicate linework, realistic body proportions, urban lifestyle settings, subtle emotional expressions, stylish panel compositions, contemporary adult romance atmosphere, detailed clothing and accessory rendering, muted elegant screentone",
-    "negative_style_prompt": "childish, chibi, action battle, fantasy magic, bright colorful, simple cartoony",
-    "preview_hint": "성숙하고 세련된 조세이풍. 패션·도시·어른의 감성."
+    "style_prompt": "Japanese josei fashion-romance manga visual grammar, mature elongated proportions, refined delicate linework, stylish urban body language, fashion illustration influence, detailed clothing folds jewelry and accessories, muted elegant screentone, smoky live-house or city apartment atmosphere, subtle adult expressions, asymmetrical stylish panel compositions, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable band or fashion marks, childish chibi proportions, action battle poses, fantasy magic effects, bright toy colors, simple cartoony faces",
+    "preview_hint": "NANA/파라다이스 키스 쪽 조세이 감성. 패션, 도시, 성숙한 표정."
   },
   {
     "id": "manga_shonen_classic",
     "category": "Manga",
-    "label": "클래식 소년만가 · 원피스",
+    "label": "클래식 소년 · 원피스",
     "render_mode": "illustration",
-    "style_prompt": "classic japanese shonen manga style, One Piece aesthetic, bold exaggerated character designs, wild creative proportions, adventurous dynamic compositions, detailed pirate and fantasy world-building, energetic action with comedic expressions, thick confident outlines, expressive speed lines, dramatic double-page spread energy, iconic pose compositions, rich screentone textures",
-    "negative_style_prompt": "realistic, subtle, minimalist, horror, dark muted, soft romantic, static boring",
-    "preview_hint": "원피스처럼 과감하고 모험적인 소년만화의 정석. 자유로운 상상력."
+    "style_prompt": "classic Japanese adventure shonen manga visual grammar, bold exaggerated silhouettes, wildly varied original character proportions, confident thick outlines, big readable expressions, adventurous fantasy-world props, comedic faces that can flip into serious action, energetic group compositions, dramatic spread-like staging, expressive speed lines, rich screentone texture, original characters only",
+    "negative_style_prompt": "copied character design, logos, exact text, recognizable pirate symbols or outfits, realistic subtle proportions, minimalist quiet drama, horror grimdark palette, soft romance-only mood, static boring panels",
+    "preview_hint": "원피스식 클래식 모험 소년만화. 과장된 실루엣, 자유로운 세계관, 큰 리액션."
   }
 ]

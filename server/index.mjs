@@ -39,6 +39,56 @@ const parseJsonSafe = (value) => {
 
 const sanitizeErrorMessage = (message) => String(message || "").replace(/\s+/g, " ").trim().slice(0, 280);
 
+const normalizeReferenceKind = (kind) => {
+  const requested = String(kind || "").trim();
+  return [
+    "character_identity",
+    "style_reference",
+    "style_consistency",
+    "product_reference"
+  ].includes(requested)
+    ? requested
+    : "generic_reference";
+};
+
+const normalizeReferenceItems = (referenceImages) => {
+  if (!Array.isArray(referenceImages)) return [];
+  return referenceImages
+    .map((item) => {
+      if (typeof item === "string") {
+        const imageUrl = item.trim();
+        return imageUrl ? { kind: "generic_reference", label: "", imageUrl } : null;
+      }
+
+      const imageUrl = String(item?.image_url || item?.imageUrl || item?.url || item?.dataUrl || "").trim();
+      if (!imageUrl) return null;
+      return {
+        kind: normalizeReferenceKind(item?.kind || item?.role || item?.type),
+        label: sanitizeErrorMessage(item?.label || ""),
+        imageUrl
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+};
+
+const describeReferenceItem = (item, index) => {
+  const prefix = `Reference image ${index + 1}${item.label ? ` (${item.label})` : ""}:`;
+  if (item.kind === "character_identity") {
+    return `${prefix} direct character reference. Keep the character recognizable and render them in the selected style from the prompt.`;
+  }
+  if (item.kind === "style_reference") {
+    return `${prefix} style reference. Use linework, palette, shading, texture, and finish.`;
+  }
+  if (item.kind === "style_consistency") {
+    return `${prefix} style continuity reference. Match rendering pipeline and finish level.`;
+  }
+  if (item.kind === "product_reference") {
+    return `${prefix} product reference. Preserve product shape, color, material, and key details.`;
+  }
+  return `${prefix} visual reference for the prompt.`;
+};
+
 const isCodexSafetyRefusal = (error) => {
   const message = String(error?.message || "").toLowerCase();
   const code = String(error?.code || "").toLowerCase();
@@ -175,6 +225,8 @@ const CODEX_IMAGE_DEVELOPER_PROMPT = [
   "Follow the user's comic page prompt closely. Preserve Korean text exactly when requested.",
   "Do not add logos, watermarks, signatures, or UI elements.",
   "Prioritize clean linework, readable speech bubbles, consistent character identity, and stable multi-panel composition.",
+  "Respect per-image reference role labels. Character references are identity-only unless the user prompt says otherwise; style must come from the prompt's STYLE instructions.",
+  "You may use web_search only to ground current real-world details when helpful, but you must always finish by invoking the image_generation tool.",
   "Just do it."
 ].join(" ");
 
@@ -226,51 +278,96 @@ const readCodexImageStream = async (response) => {
   return { imageB64, revisedPrompt, usage };
 };
 
+const readCodexImageJson = (json) => {
+  let imageB64 = null;
+  let revisedPrompt = null;
+
+  for (const item of json?.output || []) {
+    if (item?.type !== "image_generation_call") continue;
+    if (typeof item.result === "string" && item.result) imageB64 = item.result;
+    if (typeof item.revised_prompt === "string" && item.revised_prompt) {
+      revisedPrompt = item.revised_prompt;
+    }
+    if (imageB64) break;
+  }
+
+  return { imageB64, revisedPrompt, usage: json?.usage || null };
+};
+
+const throwCodexImageHttpError = async (response) => {
+  const rawText = await response.text();
+  const err = new Error(
+    sanitizeErrorMessage(parseJsonSafe(rawText)?.error?.message || rawText) ||
+      `Codex OAuth image request failed (${response.status}).`
+  );
+  err.status = response.status;
+  throw err;
+};
+
 const generateCodexImage = async ({ prompt, size, quality, moderation, model, referenceImages }) => {
   const resolvedModel = normalizeCodexImageModel(model);
-  const validReferenceImages = Array.isArray(referenceImages)
-    ? referenceImages.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 5)
-    : [];
-  const userContent = validReferenceImages.length > 0
+  const validReferenceItems = normalizeReferenceItems(referenceImages);
+  const userContent = validReferenceItems.length > 0
     ? [
-        ...validReferenceImages.map((imageUrl) => ({ type: "input_image", image_url: imageUrl })),
+        {
+          type: "input_text",
+          text: "Use the attached images as visual references for the prompt."
+        },
+        ...validReferenceItems.flatMap((item, index) => [
+          { type: "input_text", text: describeReferenceItem(item, index) },
+          { type: "input_image", image_url: item.imageUrl }
+        ]),
         { type: "input_text", text: `${prompt}${CODEX_PROMPT_FIDELITY_SUFFIX}` }
       ]
     : `${prompt}${CODEX_PROMPT_FIDELITY_SUFFIX}`;
+  const buildRequestBody = (stream) => ({
+    model: resolvedModel,
+    input: [
+      { role: "developer", content: CODEX_IMAGE_DEVELOPER_PROMPT },
+      { role: "user", content: userContent }
+    ],
+    tools: [
+      { type: "web_search" },
+      {
+        type: "image_generation",
+        quality,
+        size,
+        moderation
+      }
+    ],
+    tool_choice: "required",
+    stream
+  });
 
   const response = await fetch(`${CODEX_OAUTH_URL}/v1/responses`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({
-      model: resolvedModel,
-      input: [
-        { role: "developer", content: CODEX_IMAGE_DEVELOPER_PROMPT },
-        { role: "user", content: userContent }
-      ],
-      tools: [
-        {
-          type: "image_generation",
-          quality,
-          size,
-          moderation
-        }
-      ],
-      tool_choice: "required",
-      stream: true
-    })
+    body: JSON.stringify(buildRequestBody(true))
   });
 
-  if (!response.ok) {
-    const rawText = await response.text();
-    const err = new Error(
-      sanitizeErrorMessage(parseJsonSafe(rawText)?.error?.message || rawText) ||
-        `Codex OAuth image request failed (${response.status}).`
-    );
-    err.status = response.status;
-    throw err;
-  }
+  if (!response.ok) await throwCodexImageHttpError(response);
 
-  const { imageB64, revisedPrompt, usage } = await readCodexImageStream(response);
+  const contentType = response.headers.get("content-type") || "";
+  let { imageB64, revisedPrompt, usage } = contentType.includes("text/event-stream")
+    ? await readCodexImageStream(response)
+    : readCodexImageJson(await response.json());
+
+  if (!imageB64) {
+    console.warn("[codex-oauth] image stream contained no image; retrying as JSON", {
+      model: resolvedModel,
+      size,
+      quality
+    });
+    const retryResponse = await fetch(`${CODEX_OAUTH_URL}/v1/responses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildRequestBody(false))
+    });
+
+    if (!retryResponse.ok) await throwCodexImageHttpError(retryResponse);
+
+    ({ imageB64, revisedPrompt, usage } = readCodexImageJson(await retryResponse.json()));
+  }
   if (!imageB64) throw new Error("Codex OAuth response did not include image data.");
   return {
     image_data_url: "data:image/png;base64," + imageB64,

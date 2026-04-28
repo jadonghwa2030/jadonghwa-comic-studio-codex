@@ -107,6 +107,17 @@ export interface PageOutlineEntry {
   content_summary: string;
   narrative_function: string;
   connection_to_previous: string;
+  learning_action?: string;
+  reader_question?: string;
+  opening_scene?: string;
+  page_reveal?: string;
+  dialogue_goal?: string;
+  page_speech_flow?: string;
+  dont_explain_yet?: string;
+  allowed_content?: string[];
+  forbidden_content?: string[];
+  next_page_tease?: string;
+  density_note?: string;
 }
 
 export interface PlanOutline {
@@ -122,6 +133,19 @@ export interface ResearchPack {
   page_suggestions?: Record<ScriptDetail, number>;
 }
 
+export interface PaperStoryUnit {
+  step: string;
+  reader_question: string;
+  opening_scene: string;
+  page_reveal: string;
+  page_speech_flow?: string;
+  dont_explain_yet: string;
+  allowed_content?: string[];
+  forbidden_content?: string[];
+  next_page_tease?: string;
+  source_cue?: string;
+}
+
 export interface PaperBrief {
   paper_title: string;
   domain_guess: string;
@@ -129,6 +153,9 @@ export interface PaperBrief {
   one_line_takeaway: string;
   motivation_context: string;
   reader_hook_example: string;
+  opening_candidates: string[];
+  paper_story_units: PaperStoryUnit[];
+  page_budget_note: string;
   core_problem: string;
   research_question: string;
   prior_limitations: string[];
@@ -278,6 +305,46 @@ export interface WebtoonScrollChoreography {
   beats: WebtoonScrollBeat[];
 }
 
+export type LearningLayoutRole =
+  | "definition"
+  | "comparison"
+  | "process"
+  | "reveal"
+  | "quiz"
+  | "summary"
+  | "misconception"
+  | "example"
+  | "debate"
+  | "investigation"
+  | "timeline"
+  | "cause_effect"
+  | "cutaway"
+  | "experiment";
+
+export type LearningLayoutFlow =
+  | "balanced_grid"
+  | "top_to_bottom"
+  | "left_right_compare"
+  | "setup_to_punchline"
+  | "zoom_in"
+  | "hero_focus"
+  | "action_diagonal"
+  | "collision"
+  | "evidence_stack"
+  | "timeline_burst"
+  | "cause_chain"
+  | "cutaway_focus";
+
+export type LearningLayoutDensity = "simple" | "balanced" | "dense";
+
+export interface LearningLayoutIntent {
+  role: LearningLayoutRole;
+  focus_panel_index: number;
+  visual_flow: LearningLayoutFlow;
+  density: LearningLayoutDensity;
+  template_reason: string;
+}
+
 export interface Beat {
   id: string;
   title: string;
@@ -307,6 +374,8 @@ export interface CharacterSpec {
   catchphrase?: string;
   catchphrase_frequency?: CatchphraseFrequency;
   reference_images: string[];
+  style_aligned_reference_images?: string[];
+  style_aligned_reference_style_key?: string;
 }
 
 export interface SeriesSpec {
@@ -392,6 +461,8 @@ export interface PageSpec {
     border_px: number;
     border_radius_px: number;
     background_color: string;
+    template_panels?: LayoutTemplate["panels"];
+    learning_layout_intent?: LearningLayoutIntent;
     webtoon_layout?: WebtoonDynamicLayout;
     scroll_choreography?: WebtoonScrollChoreography;
     scroll?: {

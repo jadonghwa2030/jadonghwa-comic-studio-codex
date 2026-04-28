@@ -227,6 +227,23 @@ const sanitizePaperBrief = (value: unknown): PaperBrief | null => {
   const raw = value as Record<string, unknown>;
   const toStrings = (input: unknown): string[] =>
     Array.isArray(input) ? input.filter((item): item is string => typeof item === "string") : [];
+  const toPaperStoryUnits = (input: unknown): PaperBrief["paper_story_units"] =>
+    Array.isArray(input)
+      ? input
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+        .map((item) => ({
+          step: typeof item.step === "string" ? item.step : "",
+          reader_question: typeof item.reader_question === "string" ? item.reader_question : "",
+          opening_scene: typeof item.opening_scene === "string" ? item.opening_scene : "",
+          page_reveal: typeof item.page_reveal === "string" ? item.page_reveal : "",
+          page_speech_flow: typeof item.page_speech_flow === "string" ? item.page_speech_flow : "",
+          dont_explain_yet: typeof item.dont_explain_yet === "string" ? item.dont_explain_yet : "",
+          allowed_content: toStrings(item.allowed_content),
+          forbidden_content: toStrings(item.forbidden_content),
+          next_page_tease: typeof item.next_page_tease === "string" ? item.next_page_tease : "",
+          source_cue: typeof item.source_cue === "string" ? item.source_cue : ""
+        }))
+      : [];
 
   return {
     paper_title: typeof raw.paper_title === "string" ? raw.paper_title : "",
@@ -235,6 +252,9 @@ const sanitizePaperBrief = (value: unknown): PaperBrief | null => {
     one_line_takeaway: typeof raw.one_line_takeaway === "string" ? raw.one_line_takeaway : "",
     motivation_context: typeof raw.motivation_context === "string" ? raw.motivation_context : "",
     reader_hook_example: typeof raw.reader_hook_example === "string" ? raw.reader_hook_example : "",
+    opening_candidates: toStrings(raw.opening_candidates),
+    paper_story_units: toPaperStoryUnits(raw.paper_story_units),
+    page_budget_note: typeof raw.page_budget_note === "string" ? raw.page_budget_note : "",
     core_problem: typeof raw.core_problem === "string" ? raw.core_problem : "",
     research_question: typeof raw.research_question === "string" ? raw.research_question : "",
     prior_limitations: toStrings(raw.prior_limitations),
@@ -279,7 +299,7 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
       raw.geminiReasoningEffort === "low" || raw.geminiReasoningEffort === "high"
         ? raw.geminiReasoningEffort
         : "medium",
-    layoutVariety: isLayoutVariety(raw.layoutVariety) ? raw.layoutVariety : "medium",
+    layoutVariety: isLayoutVariety(raw.layoutVariety) ? raw.layoutVariety : "high",
     imageSize: isImageSize(raw.imageSize) ? raw.imageSize : "1K",
     imageProvider: isImageProvider(raw.imageProvider) ? raw.imageProvider : "codex",
     codexImageQuality: isCodexImageQuality(raw.codexImageQuality)

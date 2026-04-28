@@ -145,6 +145,166 @@
     ]
   },
   {
+    "id": "cinematic_definition_3",
+    "label": "Cinematic Definition 3",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.04, "y": 0.03, "w": 0.92, "h": 0.54 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.62, "y": 0.41, "w": 0.30, "h": 0.18 }, "z": 3, "target_aspect_ratio": "3:2", "decor": { "border_px": 8, "shadow": true } },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.62, "w": 0.90, "h": 0.33 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "impact_reveal_3",
+    "label": "Impact Reveal 3",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.18 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.28, "y": 0.25, "w": 0.44, "h": 0.18 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.03, "y": 0.48, "w": 0.94, "h": 0.49 }, "z": 1, "target_aspect_ratio": "4:3" }
+    ]
+  },
+  {
+    "id": "debate_collision_5",
+    "label": "Debate Collision 5",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "poly", "poly": [[0.04, 0.03], [0.60, 0.03], [0.46, 0.33], [0.04, 0.33]], "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.62, 0.03], [0.96, 0.03], [0.96, 0.33], [0.48, 0.33]], "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.34, "y": 0.30, "w": 0.32, "h": 0.15 }, "z": 3, "target_aspect_ratio": "3:2", "decor": { "border_px": 8, "shadow": true } },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.05, "y": 0.48, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.74, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "misconception_crack_5",
+    "label": "Misconception Crack 5",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.22 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.05, 0.28], [0.95, 0.20], [0.95, 0.43], [0.05, 0.51]], "z": 2, "target_aspect_ratio": "16:9" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.54, "w": 0.43, "h": 0.19 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.52, "y": 0.54, "w": 0.43, "h": 0.19 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.77, "w": 0.90, "h": 0.19 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "investigation_board_7",
+    "label": "Investigation Board 7",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.43, "h": 0.50 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.52, "y": 0.03, "w": 0.43, "h": 0.15 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.52, "y": 0.20, "w": 0.20, "h": 0.16 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.75, "y": 0.20, "w": 0.20, "h": 0.16 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.52, "y": 0.38, "w": 0.43, "h": 0.15 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.05, "y": 0.57, "w": 0.43, "h": 0.38 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 7, "shape": "rect", "rect": { "x": 0.52, "y": 0.57, "w": 0.43, "h": 0.38 }, "z": 1, "target_aspect_ratio": "3:4" }
+    ]
+  },
+  {
+    "id": "quiz_tension_6",
+    "label": "Quiz Tension 6",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.20 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.05, "y": 0.26, "w": 0.42, "h": 0.16 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.53, "y": 0.26, "w": 0.42, "h": 0.16 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.10, "y": 0.45, "w": 0.32, "h": 0.15 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.58, "y": 0.45, "w": 0.32, "h": 0.15 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.05, "y": 0.64, "w": 0.90, "h": 0.32 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "myth_fact_split_5",
+    "label": "Myth Fact Split 5",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "poly", "poly": [[0.05, 0.03], [0.50, 0.03], [0.43, 0.45], [0.05, 0.45]], "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.52, 0.03], [0.95, 0.03], [0.95, 0.45], [0.45, 0.45]], "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.08, "y": 0.49, "w": 0.38, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.54, "y": 0.49, "w": 0.38, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.73, "w": 0.90, "h": 0.23 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "timeline_burst_6",
+    "label": "Timeline Burst 6",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "poly", "poly": [[0.05, 0.03], [0.47, 0.03], [0.42, 0.24], [0.05, 0.24]], "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "poly", "poly": [[0.50, 0.03], [0.95, 0.03], [0.95, 0.24], [0.45, 0.24]], "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.28, "w": 0.28, "h": 0.18 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.36, "y": 0.28, "w": 0.28, "h": 0.18 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.67, "y": 0.28, "w": 0.28, "h": 0.18 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.05, "y": 0.51, "w": 0.90, "h": 0.44 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "cause_effect_chain_6",
+    "label": "Cause Effect Chain 6",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.42, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.53, "y": 0.07, "w": 0.42, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.31, "w": 0.42, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.53, "y": 0.35, "w": 0.42, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.59, "w": 0.42, "h": 0.20 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.53, "y": 0.63, "w": 0.42, "h": 0.29 }, "z": 1, "target_aspect_ratio": "3:4" }
+    ]
+  },
+  {
+    "id": "process_cutaway_6",
+    "label": "Process Cutaway 6",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.58, "h": 0.44 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.66, "y": 0.03, "w": 0.29, "h": 0.13 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.66, "y": 0.19, "w": 0.29, "h": 0.13 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.66, "y": 0.35, "w": 0.29, "h": 0.13 }, "z": 1, "target_aspect_ratio": "3:2" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.52, "w": 0.43, "h": 0.39 }, "z": 1, "target_aspect_ratio": "3:4" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.52, "y": 0.52, "w": 0.43, "h": 0.39 }, "z": 1, "target_aspect_ratio": "3:4" }
+    ]
+  },
+  {
+    "id": "zoom_cascade_5",
+    "label": "Zoom Cascade 5",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1400 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.28 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.58, "y": 0.23, "w": 0.32, "h": 0.19 }, "z": 3, "target_aspect_ratio": "3:2", "decor": { "border_px": 8, "shadow": true } },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.05, "y": 0.46, "w": 0.43, "h": 0.22 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.52, "y": 0.46, "w": 0.43, "h": 0.22 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.05, "y": 0.72, "w": 0.90, "h": 0.24 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
+    "id": "experiment_failure_7",
+    "label": "Experiment Failure 7",
+    "variety_tier": "high",
+    "canvas": { "w": 800, "h": 1500 },
+    "panels": [
+      { "panel_index": 1, "shape": "rect", "rect": { "x": 0.05, "y": 0.03, "w": 0.90, "h": 0.18 }, "z": 1, "target_aspect_ratio": "16:9" },
+      { "panel_index": 2, "shape": "rect", "rect": { "x": 0.05, "y": 0.24, "w": 0.43, "h": 0.18 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 3, "shape": "rect", "rect": { "x": 0.52, "y": 0.24, "w": 0.43, "h": 0.18 }, "z": 1, "target_aspect_ratio": "4:3" },
+      { "panel_index": 4, "shape": "rect", "rect": { "x": 0.07, "y": 0.45, "w": 0.24, "h": 0.14 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 5, "shape": "rect", "rect": { "x": 0.38, "y": 0.45, "w": 0.24, "h": 0.14 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 6, "shape": "rect", "rect": { "x": 0.69, "y": 0.45, "w": 0.24, "h": 0.14 }, "z": 1, "target_aspect_ratio": "1:1" },
+      { "panel_index": 7, "shape": "rect", "rect": { "x": 0.05, "y": 0.63, "w": 0.90, "h": 0.33 }, "z": 1, "target_aspect_ratio": "16:9" }
+    ]
+  },
+  {
     "id": "i2v_frame_16_9",
     "label": "I2V Frame 16:9",
     "variety_tier": "low",

@@ -108,8 +108,8 @@ export const FORMAT_CONFIGS: Record<PublicationFormat, FormatConfig> = {
 };
 
 /**
- * Legacy learning-comic template catalog (pre multi-format era).
- * Keep this stable so learning mode does not drift when other format templates evolve.
+ * Learning-comic template catalog.
+ * Non-pro UI paths filter this back to 4-panel templates; Pro may use the 3-7 panel templates.
  */
 const LEGACY_LEARNING_TEMPLATE_IDS = [
   "classic_grid",
@@ -124,6 +124,18 @@ const LEGACY_LEARNING_TEMPLATE_IDS = [
   "diagonal_v2",
   "quad_asymmetric",
   "inset_strip",
+  "cinematic_definition_3",
+  "impact_reveal_3",
+  "debate_collision_5",
+  "misconception_crack_5",
+  "investigation_board_7",
+  "quiz_tension_6",
+  "myth_fact_split_5",
+  "timeline_burst_6",
+  "cause_effect_chain_6",
+  "process_cutaway_6",
+  "zoom_cascade_5",
+  "experiment_failure_7",
 ] as const;
 
 /** 웹툰 동적 레이아웃 제약 조건 (단일 9:16 페이지 기준) */
