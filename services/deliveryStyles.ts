@@ -44,40 +44,11 @@ export const DELIVERY_STYLE_PRESETS: DeliveryStylePreset[] = [
     recommended_audience: ["teen", "beginner", "intermediate"]
   },
   {
-    id: "marine_literature",
-    label: "해병문학체",
-    instruction:
-      "해병문학체의 과장된 서사/웅장한 어투를 패러디로 사용하되, 과격한 폭력·혐오·모욕 표현은 절대 금지입니다. 학습 내용이 묻히지 않게, 매 컷의 핵심 개념은 '정확한 한 문장'으로 분리해 선명하게 전달하세요. 제스처는 과장된 결연함(주먹 쥠, 바람에 휘날리는 망토 같은 연출)을 사용하세요.",
-    recommended_audience: ["teen", "beginner", "intermediate"]
-  },
-  {
-    id: "strict_teacher",
-    label: "표독한 선생님",
-    instruction:
-      "엄격하고 단호한 선생님 말투로 진행하되, 인신공격/모욕/비하는 금지입니다(예: \"이걸 모르면 바보다\" 금지). 대신 기준을 제시하고 오답을 교정하는 방식으로. 제스처는 분필로 칠판 두드리기, 손가락으로 포인트 찍기 등 '수업 장면' 중심으로 사용하세요.",
-    recommended_audience: ["teen", "beginner", "intermediate", "expert"]
-  },
-  {
     id: "kindergarten_teacher",
     label: "유치원 선생님",
     instruction:
       "유치원 선생님처럼 아주 상냥하고 쉬운 말로, 짧은 문장과 반복(핵심 단어 1~2회)으로 설명하세요. 무서운 표현/불안 조장은 금지입니다. 제스처는 박수, 손 하트, 손가락으로 '하나-둘-셋' 세기 등으로 크게 보여 주세요.",
     recommended_audience: ["kids"]
-  },
-  {
-    id: "sensual_pg13",
-    label: "관능적인 말투(PG-13)",
-    instruction:
-      "전체 톤은 은근하고 매혹적이되(가벼운 플러팅/감각적 비유 정도), 노골적 성적 표현/성행위/신체 부위의 성적 묘사는 절대 금지입니다. 학습 주제가 중심이어야 하고, 분위기는 '세련된 라디오 DJ' 정도로만 유지하세요. 제스처는 과하지 않게(미소, 눈맞춤, 손끝으로 포인트) 사용하세요.",
-    recommended_audience: ["beginner", "intermediate", "expert"],
-    unsafe_for_audience: ["kids", "teen"]
-  },
-  {
-    id: "korean_american",
-    label: "미국교포 말투",
-    instruction:
-      "한국어 중심으로 말하되, 자연스러운 코드 스위칭(가끔 짧은 영어 단어/구절)을 섞으세요. 억지 억양/조롱/고정관념은 금지입니다. 예: \"포인트는 this part야\" 정도의 가벼운 삽입. 제스처는 자신감 있게(손바닥 펼치며 강조, 어깨 가볍게 으쓱) 사용하세요.",
-    recommended_audience: ["teen", "beginner", "intermediate", "expert"]
   },
   {
     id: "custom",
@@ -104,16 +75,8 @@ const CINEMATIC_PRESET_INSTRUCTIONS: Record<DeliveryStyleId, string> = {
     "반존대 리듬으로 자연스럽게 전개하되 조롱/비하 톤은 금지하세요. 설명형 문장 대신 관계 변화와 긴장을 드러내는 짧은 대사를 사용하세요.",
   military:
     "군대식 리듬은 어투 스타일로만 사용하고 폭력/가혹/혐오 미화는 금지하세요. 지시형 문장보다 갈등 국면의 결단/긴장을 드러내는 대사를 우선하세요.",
-  marine_literature:
-    "과장된 장르 어투는 유지하되 과격/혐오/모욕 표현은 금지하세요. 세계관 톤을 해치지 않는 범위에서 강렬하고 짧은 대사로 전개하세요.",
-  strict_teacher:
-    "단호한 톤은 허용하되 강의/훈계식 장문은 금지하세요. 인물 압박, 판단, 반응이 보이는 대사 중심으로 구성하세요.",
   kindergarten_teacher:
     "부드럽고 쉬운 어투를 유지하되 수업식 설명은 금지하세요. 안전하고 따뜻한 감정선 속에서 사건 반응 중심의 짧은 대사를 사용하세요.",
-  sensual_pg13:
-    "은근한 분위기는 허용하되 노골적 성적 표현은 금지하세요. 대사는 절제된 감정 긴장과 서브텍스트 중심으로 작성하세요.",
-  korean_american:
-    "한국어 중심의 자연스러운 코드스위칭은 허용하되 억지 표현/고정관념은 금지하세요. 설명보다 장면 리듬과 감정 반응을 살리는 짧은 대사를 사용하세요.",
   custom:
     "사용자 지정 톤을 따르되 설명/강의문 톤은 금지하고, 감정선/갈등/전환 중심의 시네마틱 대사로 유지하세요."
 };

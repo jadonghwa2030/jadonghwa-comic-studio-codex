@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -12,6 +13,9 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const PORT = Number.parseInt(process.env.LOCAL_API_PORT || process.env.PORT || "8787", 10);
 const JSON_LIMIT = process.env.LOCAL_API_JSON_LIMIT || "50mb";
+const PROJECT_ARCHIVE_PATH = path.resolve(
+  process.env.LOCAL_PROJECT_ARCHIVE_PATH || path.join(process.cwd(), "local-project-archive", "projects.json")
+);
 const CODEX_OAUTH_PROXY_PORT = Number.parseInt(
   process.env.CODEX_OAUTH_PROXY_PORT || process.env.OAUTH_PORT || "10531",
   10
@@ -38,6 +42,38 @@ const parseJsonSafe = (value) => {
 };
 
 const sanitizeErrorMessage = (message) => String(message || "").replace(/\s+/g, " ").trim().slice(0, 280);
+
+const ensureParentDir = async (filePath) => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+};
+
+const readProjectArchive = async () => {
+  try {
+    const raw = await fs.readFile(PROJECT_ARCHIVE_PATH, "utf8");
+    const parsed = parseJsonSafe(raw);
+    return Array.isArray(parsed?.projects) ? parsed.projects : Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    if (e?.code === "ENOENT") return [];
+    throw e;
+  }
+};
+
+const writeProjectArchive = async (projects) => {
+  if (!Array.isArray(projects)) {
+    const err = new Error("Project archive payload must include a projects array.");
+    err.status = 400;
+    throw err;
+  }
+  await ensureParentDir(PROJECT_ARCHIVE_PATH);
+  const payload = {
+    version: 1,
+    updated_at: new Date().toISOString(),
+    projects
+  };
+  const tmpPath = `${PROJECT_ARCHIVE_PATH}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(payload, null, 2), "utf8");
+  await fs.rename(tmpPath, PROJECT_ARCHIVE_PATH);
+};
 
 const normalizeReferenceKind = (kind) => {
   const requested = String(kind || "").trim();
@@ -508,6 +544,7 @@ const generateCodexContent = async (request) => {
   const schema = request?.config?.responseJsonSchema || (
     request?.config?.responseSchema ? convertSchemaToJsonSchema(request.config.responseSchema) : null
   );
+  const wantsPlainText = String(request?.config?.responseMimeType || "").trim().toLowerCase() === "text/plain";
   const enableSearch = Array.isArray(request?.config?.tools) && request.config.tools.some((tool) => tool?.googleSearch);
   const model = normalizeCodexImageModel(request?.model || CODEX_DEFAULT_TEXT_MODEL);
   const reasoningEffort = normalizeReasoningEffort(
@@ -523,7 +560,9 @@ const generateCodexContent = async (request) => {
       { role: "user", content: userContent }
     ].filter(Boolean),
     stream: true,
-    ...(schema
+    ...(wantsPlainText
+      ? {}
+      : schema
       ? {
           text: {
             format: {
@@ -592,6 +631,34 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/oauth/status", async (_req, res) => {
   res.json(await getCodexOAuthStatus());
+});
+
+app.get("/api/project-archive", async (_req, res) => {
+  try {
+    res.json({
+      storage_path: PROJECT_ARCHIVE_PATH,
+      projects: await readProjectArchive()
+    });
+  } catch (e) {
+    const message = sanitizeErrorMessage(e?.message) || "Failed to read local project archive.";
+    console.error("[api] project archive read failed", { message, storage_path: PROJECT_ARCHIVE_PATH });
+    res.status(500).json({ error: { message } });
+  }
+});
+
+app.post("/api/project-archive", async (req, res) => {
+  try {
+    await writeProjectArchive(req.body?.projects);
+    res.json({
+      ok: true,
+      storage_path: PROJECT_ARCHIVE_PATH,
+      count: req.body.projects.length
+    });
+  } catch (e) {
+    const message = sanitizeErrorMessage(e?.message) || "Failed to write local project archive.";
+    console.error("[api] project archive write failed", { status: e?.status || 500, message, storage_path: PROJECT_ARCHIVE_PATH });
+    res.status(e?.status || 500).json({ error: { message } });
+  }
 });
 
 app.post("/api/codex/generate-image", async (req, res) => {

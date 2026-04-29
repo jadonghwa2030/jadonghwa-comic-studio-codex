@@ -26,12 +26,14 @@ import {
   ScriptDetail,
   SeriesPlan,
   SeriesSpec,
+  StoryAdaptationMode,
   StoryGenre,
   StoryInputType,
   ToneLevel,
   ToneMode,
   AgeRating
 } from "../types";
+import { getJson, postJson } from "./localApi";
 
 export interface SavedComicProjectSnapshot {
   topic: string;
@@ -74,6 +76,7 @@ export interface SavedComicProjectSnapshot {
   creationType?: CreationType;
   scriptText?: string;
   storyInputType?: StoryInputType;
+  storyAdaptationMode?: StoryAdaptationMode;
   ageRating?: AgeRating;
   storyGenre?: StoryGenre | null;
   pacingPreference?: PacingPreference;
@@ -92,6 +95,11 @@ export interface SavedComicProject {
 }
 
 const STORAGE_KEY = "toon-for-codex.project_archive.v1";
+
+type ProjectArchiveResponse = {
+  storage_path?: string;
+  projects?: unknown[];
+};
 
 const hasLocalStorage = (): boolean => {
   try {
@@ -165,11 +173,7 @@ const isDeliveryStyleId = (v: unknown): v is DeliveryStyleId =>
   v === "elder" ||
   v === "half_honorific" ||
   v === "military" ||
-  v === "marine_literature" ||
-  v === "strict_teacher" ||
   v === "kindergarten_teacher" ||
-  v === "sensual_pg13" ||
-  v === "korean_american" ||
   v === "custom";
 const isLayoutVariety = (v: unknown): v is LayoutVariety => v === "low" || v === "medium" || v === "high";
 const isImageSize = (v: unknown): v is ImageSize => v === "1K" || v === "2K" || v === "4K";
@@ -184,6 +188,8 @@ const isResearchMode = (v: unknown): v is ResearchMode =>
   v === "user" || v === "auto_gemini" || v === "auto_digest";
 const isCreationType = (v: unknown): v is CreationType =>
   v === "educational" || v === "story" || v === "paper";
+const getDefaultPublicationFormat = (creationType: CreationType): PublicationFormat =>
+  creationType === "story" ? "webtoon" : "learning_comic";
 const isStoryInputType = (v: unknown): v is StoryInputType =>
   v === "script" || v === "prose" || v === "scenario";
 const isAgeRating = (v: unknown): v is AgeRating =>
@@ -227,34 +233,15 @@ const sanitizePaperBrief = (value: unknown): PaperBrief | null => {
   const raw = value as Record<string, unknown>;
   const toStrings = (input: unknown): string[] =>
     Array.isArray(input) ? input.filter((item): item is string => typeof item === "string") : [];
-  const toPaperStoryUnits = (input: unknown): PaperBrief["paper_story_units"] =>
-    Array.isArray(input)
-      ? input
-        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-        .map((item) => ({
-          step: typeof item.step === "string" ? item.step : "",
-          reader_question: typeof item.reader_question === "string" ? item.reader_question : "",
-          opening_scene: typeof item.opening_scene === "string" ? item.opening_scene : "",
-          page_reveal: typeof item.page_reveal === "string" ? item.page_reveal : "",
-          page_speech_flow: typeof item.page_speech_flow === "string" ? item.page_speech_flow : "",
-          dont_explain_yet: typeof item.dont_explain_yet === "string" ? item.dont_explain_yet : "",
-          allowed_content: toStrings(item.allowed_content),
-          forbidden_content: toStrings(item.forbidden_content),
-          next_page_tease: typeof item.next_page_tease === "string" ? item.next_page_tease : "",
-          source_cue: typeof item.source_cue === "string" ? item.source_cue : ""
-        }))
-      : [];
-
   return {
     paper_title: typeof raw.paper_title === "string" ? raw.paper_title : "",
     domain_guess: typeof raw.domain_guess === "string" ? raw.domain_guess : "",
     paper_mode_track: isPaperModeTrack(raw.paper_mode_track) ? raw.paper_mode_track : "public_summary",
     one_line_takeaway: typeof raw.one_line_takeaway === "string" ? raw.one_line_takeaway : "",
+    explainer_story: typeof raw.explainer_story === "string" ? raw.explainer_story : "",
+    page_division_note: typeof raw.page_division_note === "string" ? raw.page_division_note : "",
     motivation_context: typeof raw.motivation_context === "string" ? raw.motivation_context : "",
     reader_hook_example: typeof raw.reader_hook_example === "string" ? raw.reader_hook_example : "",
-    opening_candidates: toStrings(raw.opening_candidates),
-    paper_story_units: toPaperStoryUnits(raw.paper_story_units),
-    page_budget_note: typeof raw.page_budget_note === "string" ? raw.page_budget_note : "",
     core_problem: typeof raw.core_problem === "string" ? raw.core_problem : "",
     research_question: typeof raw.research_question === "string" ? raw.research_question : "",
     prior_limitations: toStrings(raw.prior_limitations),
@@ -276,6 +263,7 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
   if (!raw || typeof raw !== "object") return null;
   const compactedSeriesPlan = compactSeriesPlanForStorage(raw.seriesPlan);
   if (!compactedSeriesPlan) return null;
+  const creationType: CreationType = isCreationType(raw.creationType) ? raw.creationType : "educational";
 
   return {
     topic: typeof raw.topic === "string" ? raw.topic : "",
@@ -284,7 +272,7 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
     outputMode: isOutputMode(raw.outputMode) ? raw.outputMode : "comic",
     publicationFormat: isPublicationFormat(raw.publicationFormat)
       ? raw.publicationFormat
-      : (raw.outputMode === "kling_i2v" ? "kling_i2v" : "learning_comic"),
+      : (raw.outputMode === "kling_i2v" ? "kling_i2v" : getDefaultPublicationFormat(creationType)),
     mangaColorMode: isMangaColorMode(raw.mangaColorMode) ? raw.mangaColorMode : "bw",
     i2vAspectRatio: isI2VAspectRatio(raw.i2vAspectRatio) ? raw.i2vAspectRatio : "16:9",
     toneMode: isToneMode(raw.toneMode) ? raw.toneMode : "normal",
@@ -333,9 +321,10 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
     pageStyleOverrides: asStyleOverrideRecord(raw.pageStyleOverrides),
     pageStyleEditedAt: asNumberRecord(raw.pageStyleEditedAt),
     globalStyleEditedAt: asNumber(raw.globalStyleEditedAt, 0),
-    creationType: isCreationType(raw.creationType) ? raw.creationType : "educational",
+    creationType,
     scriptText: typeof raw.scriptText === "string" ? raw.scriptText : "",
     storyInputType: isStoryInputType(raw.storyInputType) ? raw.storyInputType : "scenario",
+    storyAdaptationMode: raw.storyAdaptationMode === "direct" ? "direct" : "analyzed",
     ageRating: isAgeRating(raw.ageRating) ? raw.ageRating : "teen",
     storyGenre: isStoryGenre(raw.storyGenre) ? raw.storyGenre : null,
     pacingPreference: isPacingPreference(raw.pacingPreference) ? raw.pacingPreference : "balanced",
@@ -379,6 +368,33 @@ export const loadSavedComicProjects = (): SavedComicProject[] => {
   }
 };
 
+const normalizeSavedProjects = (value: unknown): SavedComicProject[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(sanitizeSavedProject)
+    .filter((p): p is SavedComicProject => Boolean(p))
+    .sort((a, b) => b.updated_at - a.updated_at);
+};
+
+export const mergeSavedComicProjects = (
+  primary: SavedComicProject[],
+  secondary: SavedComicProject[]
+): SavedComicProject[] => {
+  const byId = new Map<string, SavedComicProject>();
+  for (const project of [...secondary, ...primary]) {
+    const existing = byId.get(project.id);
+    if (!existing || project.updated_at >= existing.updated_at) {
+      byId.set(project.id, project);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => b.updated_at - a.updated_at);
+};
+
+export const loadSavedComicProjectsFromLocalArchive = async (): Promise<SavedComicProject[]> => {
+  const data = await getJson<ProjectArchiveResponse>("/api/project-archive");
+  return normalizeSavedProjects(data.projects);
+};
+
 export const persistSavedComicProjects = (projects: SavedComicProject[]): void => {
   if (!hasLocalStorage()) return;
   try {
@@ -386,4 +402,10 @@ export const persistSavedComicProjects = (projects: SavedComicProject[]): void =
   } catch (e) {
     console.warn("Failed to persist saved comic projects:", e);
   }
+};
+
+export const persistSavedComicProjectsToLocalArchive = async (
+  projects: SavedComicProject[]
+): Promise<void> => {
+  await postJson("/api/project-archive", { projects });
 };

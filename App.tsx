@@ -9,28 +9,31 @@ import { analyzeResearchReport } from './services/researchService';
 import { analyzeStoryScript } from './services/storyAnalysisService';
 import { analyzePaperPdf, analyzePaperUrl } from './services/paperService';
 import { generateGeminiResearchPack } from './services/geminiResearchService';
+import { suggestNarrativePageCounts } from './services/pageSuggestionService';
 import { getJson } from './services/localApi';
 import { DELIVERY_STYLE_PRESETS, resolveDeliveryStyleSpec } from './services/deliveryStyles';
 import { downloadAsZip, downloadFilesAsZip } from './services/postprocessor';
 import { composeWebtoonEpisodeSegments } from './services/webtoonEpisodeService';
 import { buildCodexHandoffFiles } from './services/codexHandoffService';
 import { CastPreset, CastPresetPayload, loadCastPresets, persistCastPresets } from './services/castPresetService';
-import { analyzeCharacterImage, generateCharacterCandidates, generateStyleAlignedCharacterReference, suggestCastFromContent } from './services/characterService';
-import { SavedComicProject, SavedComicProjectSnapshot, loadSavedComicProjects, persistSavedComicProjects } from './services/projectArchiveService';
+import { analyzeCharacterImage, analyzeEpisodeCastFromLibrary, EpisodeCastSelectionResult, generateCharacterCandidates, generateStyleAlignedCharacterReference, suggestCastFromContent } from './services/characterService';
+import { SavedComicProject, SavedComicProjectSnapshot, loadSavedComicProjects, loadSavedComicProjectsFromLocalArchive, mergeSavedComicProjects, persistSavedComicProjects, persistSavedComicProjectsToLocalArchive } from './services/projectArchiveService';
+import { SavedLongformProject, SavedLongformProjectSnapshot, loadLongformProjects, persistLongformProjects } from './services/seriesLibraryService';
 import { PageScriptEditorModal } from './components/PageScriptEditorModal';
 import { PageEditActionModal } from './components/PageEditActionModal';
 import { PageStyleEditorModal } from './components/PageStyleEditorModal';
 import { PageNarrativePreview } from './components/PageNarrativePreview';
 import { DevPromptCheckModal } from './components/DevPromptCheckModal';
-import { SeriesPlan, SeriesSpec, PageSpec, AppStatus, GenerationResult, NarrativeRole, StylePreset, LayoutTemplate, LayoutVariety, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ComicMode, ToneMode, ToneLevel, ScriptDetail, PageCountMode, AudienceLevel, DeliveryStyleId, IntroStyle, CharacterSpec, CastRole, CatchphraseFrequency, CharacterConsistencyMode, Language, OutputMode, I2VAspectRatio, PublicationFormat, MangaColorMode, CreationType, StoryInputType, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, WebtoonEpisodeRenderResult, ImageProvider, CodexImageQuality } from './types';
+import { SeriesPlan, SeriesSpec, PageSpec, AppStatus, GenerationResult, NarrativeRole, StylePreset, LayoutTemplate, LayoutVariety, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ComicMode, ToneMode, ToneLevel, ScriptDetail, PageCountMode, AudienceLevel, DeliveryStyleId, IntroStyle, CharacterSpec, CastRole, CatchphraseFrequency, CharacterConsistencyMode, Language, OutputMode, I2VAspectRatio, PublicationFormat, MangaColorMode, CreationType, StoryInputType, StoryAdaptationMode, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, WebtoonEpisodeRenderResult, ImageProvider, CodexImageQuality } from './types';
 import { getFormatConfig, getTemplatesForFormat, FORMAT_CONFIGS, isKlingI2V as isKlingI2VFormat, isWebtoon, isManga, isLearningComic } from './services/formatConfig';
 import { Loader2, BookOpen, Sparkles, Key, User, ArrowRight, Upload, Palette, CheckCircle2, RotateCcw, Plus, Wand2, LayoutGrid, Layers, Monitor, ChevronRight, ChevronLeft, Download, FileText, Settings2, Globe, ExternalLink, Lightbulb, UserCheck, MessageSquareText, Copy, Trash2, Bookmark, FolderOpen, Save, AlertTriangle } from 'lucide-react';
 
 const DEFAULT_MAX_PAGE_COUNT = 12;
-const MAX_SAVED_PROJECTS = 20;
+const MAX_SAVED_PROJECTS = 200;
 const MAX_PERSISTABLE_DATA_URL_LENGTH = 300_000;
 const MAX_PERSISTABLE_REF_IMAGES_PER_CHARACTER = 1;
 const MAX_PERSISTABLE_PRODUCT_REF_IMAGES = 1;
+const STORY_MIN_INPUT_CHARS = 50;
 const REFERENCE_IMAGE_MAX_EDGE = 1024;
 const REFERENCE_IMAGE_JPEG_QUALITY = 0.82;
 
@@ -49,6 +52,33 @@ const clampPageCount = (value: number): number => {
   return Math.max(1, Math.min(MAX_PAGE_COUNT, floored));
 };
 
+const estimateDirectStoryPageSuggestions = (
+  text: string,
+  inputType: StoryInputType
+): Record<ScriptDetail, number> => {
+  const body = String(text || "").trim();
+  const nonSpaceChars = body.replace(/\s/g, "").length;
+  const paragraphs = body.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean).length;
+  const dialogueLines = body.split("\n").filter((line) => /[:：」"]/.test(line.trim())).length;
+  const structureHint =
+    inputType === "script"
+      ? Math.ceil(Math.max(dialogueLines, paragraphs) / 8)
+      : inputType === "prose"
+        ? Math.ceil(paragraphs / 3)
+        : Math.ceil(paragraphs / 2);
+  const budgets: Record<StoryInputType, Record<ScriptDetail, number>> = {
+    script: { brief: 1400, normal: 950, detailed: 650 },
+    prose: { brief: 1100, normal: 750, detailed: 500 },
+    scenario: { brief: 800, normal: 550, detailed: 380 }
+  };
+  const minPages: Record<ScriptDetail, number> = { brief: 1, normal: 2, detailed: 3 };
+  return {
+    brief: clampPageCount(Math.max(minPages.brief, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].brief))),
+    normal: clampPageCount(Math.max(minPages.normal, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].normal))),
+    detailed: clampPageCount(Math.max(minPages.detailed, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].detailed)))
+  };
+};
+
 const isEduCinematicMode = (mode: ComicMode): boolean => mode === "cinematic";
 const isPureCinematicMode = (mode: ComicMode): boolean => mode === "pure_cinematic";
 const isAnyCinematicMode = (mode: ComicMode): boolean => isEduCinematicMode(mode) || isPureCinematicMode(mode);
@@ -62,6 +92,10 @@ const DEFAULT_IMAGE_PROVIDER: ImageProvider = "codex";
 const DEFAULT_CODEX_IMAGE_QUALITY: CodexImageQuality = "medium";
 const DEFAULT_CODEX_IMAGE_MODEL = "gpt-5.5";
 const DEFAULT_LAYOUT_VARIETY: LayoutVariety = "high";
+const LEARNING_QUESTION_TYPE: QuestionType = "explain";
+const LEARNING_COMIC_MODE: ComicMode = "learning";
+const LEARNING_INTRO_STYLE: IntroStyle = "standard";
+const LEARNING_NARRATIVE_ROLE: NarrativeRole = "narrator";
 type OutputReaderMode = "visual" | "visual_plus_script";
 type UiLanguage = "ko" | "en";
 
@@ -530,13 +564,8 @@ const buildResearchPrompt = (topic: string, role: NarrativeRole, questionType: Q
     "verified_claims": [
       { "claim": "핵심 사실/관찰(검증됨)", "evidence": "짧은 근거(링크 없이도 OK)" }
     ],
-    "definitions": [
-      { "term": "용어/경계", "definition": "짧은 정의" }
-    ],
     "where_a_wins": ["조건 ..."],
     "where_b_wins": ["조건 ..."],
-    "unknowns": ["UNKNOWN ..."],
-    "do_not_say": ["근거 없이 단정 금지 문장/표현"],
     "beats_4_panel": ["1컷(프레임)", "2컷(축1/2)", "3컷(축3/트레이드오프)", "4컷(조건부 결론/주의)"]
   }
 }`
@@ -548,17 +577,12 @@ const buildResearchPrompt = (topic: string, role: NarrativeRole, questionType: Q
     "verified_claims": [
       { "claim": "핵심 사실/관찰(검증됨)", "evidence": "짧은 근거(링크 없이도 OK)" }
     ],
-    "definitions": [
-      { "term": "용어/경계", "definition": "짧은 정의" }
-    ],
     "common_misconceptions": [
       { "myth": "오해(선택)", "fact": "정정(선택)" }
     ],
     "analogy_bank": [
       { "analogy": "강력한 비유", "maps_to": "어떤 개념을 설명하는지" }
     ],
-    "unknowns": ["UNKNOWN ..."],
-    "do_not_say": ["근거 없이 단정 금지 문장/표현"],
     "beats_4_panel": ${isHowTo
         ? '["1컷(오늘의 목표/완성)", "2컷(준비물/전제)", "3컷(핵심 단계/순서)", "4컷(주의/팁/체크)"]'
         : '["1컷(상황/질문 훅)", "2컷(정의/경계)", "3컷(원리/예시)", "4컷(요약/체크)"]'
@@ -573,7 +597,7 @@ const buildResearchPrompt = (topic: string, role: NarrativeRole, questionType: Q
 ${questionLine}
 
 중요:
-- 모르는 내용은 추측하지 말고 "UNKNOWN"으로 표시하세요.
+- 모르는 내용은 추측하지 말고, 확인하기 어렵다고 자연스럽게 남기세요.
 - 단정적 사실/수치는 반드시 "근거(evidence)"를 함께 적어 주세요. (출처 URL은 선택)
 - 숫자/연도/고유명사/인과관계는 특히 엄격하게 검증하세요.
 - ${extraRuleLine}
@@ -608,14 +632,14 @@ const buildReportRequestTemplate = (
     const commonRules = `당신은 '시네마틱 스토리 제작'을 위한 리서치 보고서를 작성합니다.
 
 모드: CINEMATIC (순수 스토리)
-주제: "${topic || "UNKNOWN"}"
+주제: "${topic || "확인 불가"}"
 목표: 아래 보고서만을 근거로, 4컷 시네마틱 스토리의 장면 재료(세계관/갈등/전환/엔딩 훅)를 만들 수 있게 합니다.
 
 매우 중요한 규칙(반드시 준수):
 - 출력은 한국어, 자연스러운 보고서 문장으로 작성하세요.
 - 표(테이블) 사용 금지. (마크다운 표 포함)
 - 입력/근거 없이 사실/수치/연도/고유명사/인과관계를 만들어내지 마세요.
-- 확인 불가 항목은 반드시 "UNKNOWN"으로 표시하세요. (없는 내용을 채우지 말 것)
+- 확인 불가 항목은 없는 내용을 채우지 말고 자연스럽게 보류하세요.
 - 특정 개인/집단 비방, 허위 사실 단정, 명예훼손성 서사는 금지합니다.
 - "교육적 요약/정의 강의" 대신 장면화 가능한 재료(행동, 충돌, 동기, 소품, 공간, 카메라 무드)로 정리하세요.
 
@@ -648,8 +672,6 @@ ${roleLine}
 7) 4컷 비트
 - 1컷 세팅 → 2컷 충돌 → 3컷 전환 → 4컷 엔딩 훅.
 
-8) UNKNOWN
-- 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 9) Sources
 - [S1] ...
@@ -682,8 +704,6 @@ ${roleLine}
 7) 4컷 비트
 - 1컷 대치 → 2컷 압박 → 3컷 반전 → 4컷 결판/훅.
 
-8) UNKNOWN
-- 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 9) Sources
 - [S1] ...
@@ -718,8 +738,6 @@ ${roleLine}
 8) 4컷 비트
 - 1컷 세팅(욕망) → 2컷 충돌 → 3컷 전환(선택/대가) → 4컷 엔딩 훅.
 
-9) UNKNOWN
-- 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 10) Sources
 - [S1] ...
@@ -734,7 +752,7 @@ ${roleLine}
   const commonRules = `당신은 '${productionLabel}'을 위한 리서치 보고서를 작성합니다.
 
 모드: ${isEduCinematic ? "EDU-CINEMATIC" : "LEARNING"}
-주제: "${topic || "UNKNOWN"}"
+주제: "${topic || "확인 불가"}"
 목표: 아래 보고서만을 근거로, ${goalLabel}
 
 매우 중요한 규칙(반드시 준수):
@@ -743,7 +761,7 @@ ${roleLine}
 - 입력/근거 없이 사실/수치/연도/고유명사/인과관계를 만들어내지 마세요.
 - 사실/수치/연도/고유명사는 가능한 한 근거를 함께 붙이세요.
 - 근거 형식(예시): [S1] 출처명 (URL) "짧은 인용(1~2문장)" 또는 요약.
-- 불확실/논쟁/근거 부족은 반드시 "UNKNOWN"으로 표시하세요. (없는 내용을 채우지 말 것)
+- 불확실/논쟁/근거 부족은 없는 내용을 채우지 말고 자연스럽게 보류하세요.
 - ${isEduCinematic ? "강의문 과다 금지: 장면에서 보여줄 수 있는 재료(행동/상황/소품)를 포함하세요." : "학습 난이도에 맞게 설명 가능하도록 정의/경계를 명확히 써주세요."}
 
 ${roleLine}
@@ -758,7 +776,7 @@ ${roleLine}
 - "무조건 최고/최악" 단정 금지. "X가 중요하면 추천, Y가 중요하면 비추천"처럼 조건부로.
 
 2) 리뷰 대상(제품/버전/가격대/출시 시기/카테고리)
-- 모델명/버전/세부 스펙을 확인할 수 없다면 "UNKNOWN" 처리.
+- 모델명/버전/세부 스펙을 확인할 수 없다면 확인하기 어렵다고만 남기세요.
 
 3) 사용 시나리오(전제)
 - 어떤 사용자/환경/예산/우선순위에서 평가하는지 먼저 선언.
@@ -772,8 +790,6 @@ ${roleLine}
 6) 만화화 힌트(4컷)
 - ${isEduCinematic ? "도입(상황) → 긴장(문제) → 전환(해결) → 결론(조건부 추천)" : "도입(목표) → 핵심기준 → 비교/검증 → 결론/체크"}
 
-7) UNKNOWN
-- 지금 보고서 기준으로 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 8) Sources
 - [S1] ...
@@ -800,8 +816,6 @@ ${roleLine}
 5) 만화화 힌트(4컷)
 - ${isEduCinematic ? "도입(대치) → 긴장(충돌) → 전환(트레이드오프) → 결론(조건부)" : "도입(질문) → 축1/2 → 축3/트레이드오프 → 조건부 결론"}
 
-6) UNKNOWN
-- 지금 보고서 기준으로 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 7) Sources
 - [S1] ...
@@ -829,8 +843,6 @@ ${roleLine}
 6) 만화화 힌트(4컷)
 - ${isEduCinematic ? "도입(상황/목표) → 정의/경계 → 사건/행동으로 원리 제시 → 여운/체크" : "도입(질문/목표) → 정의/경계 → 원리/예시 → 요약/체크"}
 
-7) UNKNOWN
-- 지금 보고서 기준으로 단정할 수 없는 항목을 "UNKNOWN: ..." 형태로 명시
 
 8) Sources
 - [S1] ...
@@ -890,7 +902,7 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
       const topic = stringifyIfPresent(question.topic);
       const a = stringifyIfPresent(question.a);
       const b = stringifyIfPresent(question.b);
-      const title = type === "compare" ? "비교(Compare)" : type === "explain" ? "설명(Explain)" : type || "UNKNOWN";
+      const title = type === "compare" ? "비교(Compare)" : type === "explain" ? "설명(Explain)" : type || "확인 불가";
 
       lines.push("[QUESTION]");
       lines.push(`- type: ${title}`);
@@ -965,21 +977,6 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
         }
         lines.push("");
       }
-
-      const defs = Array.isArray(mini.definitions) ? mini.definitions : [];
-      if (defs.length > 0) {
-        lines.push("[DEFINITIONS]");
-        for (const d of defs) {
-          if (!d || typeof d !== "object") continue;
-          const term = stringifyIfPresent(d.term);
-          const def = stringifyIfPresent(d.definition);
-          const sourceUrl = normalizeUrl(d.source_url ?? d.source ?? d.url ?? d.uri);
-          if (!term && !def) continue;
-          lines.push(`- ${term || "TERM"}: ${def || "DEFINITION"}${sourceUrl ? ` (${sourceUrl})` : ""}`);
-        }
-        lines.push("");
-      }
-
       const misconceptions = Array.isArray(mini.common_misconceptions) ? mini.common_misconceptions : [];
       if (misconceptions.length > 0) {
         lines.push("[COMMON MISCONCEPTIONS]");
@@ -989,8 +986,8 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
           const fact = stringifyIfPresent(m.fact);
           const sourceUrl = normalizeUrl(m.source_url ?? m.source ?? m.url ?? m.uri);
           if (!myth && !fact) continue;
-          lines.push(`- myth: ${myth || "UNKNOWN"}`);
-          lines.push(`  fact: ${fact || "UNKNOWN"}${sourceUrl ? ` (${sourceUrl})` : ""}`);
+          lines.push(`- myth: ${myth || "확인 불가"}`);
+          lines.push(`  fact: ${fact || "확인 불가"}${sourceUrl ? ` (${sourceUrl})` : ""}`);
         }
         lines.push("");
       }
@@ -1017,27 +1014,6 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
         }
         lines.push("");
       }
-
-      const unknowns = Array.isArray(mini.unknowns) ? mini.unknowns : [];
-      if (unknowns.length > 0) {
-        lines.push("[UNKNOWN / OPEN QUESTIONS]");
-        for (const u of unknowns) {
-          const s = stringifyIfPresent(u);
-          if (s) lines.push(`- ${s}`);
-        }
-        lines.push("");
-      }
-
-      const dns = Array.isArray(mini.do_not_say) ? mini.do_not_say : [];
-      if (dns.length > 0) {
-        lines.push("[DO NOT SAY]");
-        for (const d of dns) {
-          const s = stringifyIfPresent(d);
-          if (s) lines.push(`- ${s}`);
-        }
-        lines.push("");
-      }
-
       return lines.join("\n").trim();
     }
 
@@ -1090,8 +1066,8 @@ const parseResearchPack = (input: string): { pack: ResearchPack; error?: string 
         const fact = stringifyIfPresent(m.fact);
         const sourceUrl = normalizeUrl(m.source_url ?? m.source ?? m.url ?? m.uri);
         if (!myth && !fact) continue;
-        lines.push(`- myth: ${myth || "UNKNOWN"}`);
-        lines.push(`  fact: ${fact || "UNKNOWN"}${sourceUrl ? ` (${sourceUrl})` : ""}`);
+        lines.push(`- myth: ${myth || "확인 불가"}`);
+        lines.push(`  fact: ${fact || "확인 불가"}${sourceUrl ? ` (${sourceUrl})` : ""}`);
       }
       lines.push("");
     }
@@ -1149,12 +1125,15 @@ const PAPER_PUBLICATION_FORMATS: PublicationFormat[] = ["learning_comic", "webto
 const getSelectablePublicationFormats = (creationType: CreationType): PublicationFormat[] =>
   creationType === "paper" ? PAPER_PUBLICATION_FORMATS : STORY_PUBLICATION_FORMATS;
 
+const getDefaultPublicationFormat = (creationType: CreationType): PublicationFormat =>
+  creationType === "story" ? "webtoon" : "learning_comic";
+
 const normalizeSelectablePublicationFormat = (
   format: PublicationFormat,
   creationType: CreationType
 ): PublicationFormat => {
   if (format === "manga") return "learning_comic";
-  if (creationType === "paper" && format === "kling_i2v") return "webtoon";
+  if (creationType === "paper" && format === "kling_i2v") return getDefaultPublicationFormat(creationType);
   return format;
 };
 
@@ -1168,10 +1147,11 @@ const App: React.FC = () => {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [geminiReasoningEffort, setGeminiReasoningEffort] = useState<GeminiReasoningEffort>("medium");
-  const [questionType, setQuestionType] = useState<QuestionType>("explain");
+  const [productionMode, setProductionMode] = useState<"single" | "new_longform" | "longform">("single");
   const [creationType, setCreationType] = useState<CreationType>("educational");
   const [scriptText, setScriptText] = useState("");
   const [storyInputType, setStoryInputType] = useState<StoryInputType>("scenario");
+  const [storyAdaptationMode, setStoryAdaptationMode] = useState<StoryAdaptationMode>("analyzed");
   const [ageRating, setAgeRating] = useState<AgeRating>("teen");
   const [storyGenre, setStoryGenre] = useState<StoryGenre | null>(null);
   const [pacingPreference, setPacingPreference] = useState<PacingPreference>("balanced");
@@ -1192,7 +1172,6 @@ const App: React.FC = () => {
   const [i2vAspectRatio, setI2VAspectRatio] = useState<I2VAspectRatio>("16:9");
   const [toneMode, setToneMode] = useState<ToneMode>("normal");
   const [toneLevel, setToneLevel] = useState<ToneLevel>("medium");
-  const [introStyle, setIntroStyle] = useState<IntroStyle>("standard");
   const [language, setLanguage] = useState<Language>("ko");
   const [busyPhase, setBusyPhase] = useState<"planning" | "translating">("planning");
   const [audienceLevel, setAudienceLevel] = useState<AudienceLevel>("beginner");
@@ -1237,6 +1216,14 @@ const App: React.FC = () => {
   const [savedProjects, setSavedProjects] = useState<SavedComicProject[]>(() => loadSavedComicProjects());
   const [selectedSavedProjectId, setSelectedSavedProjectId] = useState<string>("");
   const [activeProjectId, setActiveProjectId] = useState<string>("");
+  const [longformProjects, setLongformProjects] = useState<SavedLongformProject[]>(() => loadLongformProjects());
+  const [selectedLongformProjectId, setSelectedLongformProjectId] = useState<string>("");
+  const [activeLongformProjectId, setActiveLongformProjectId] = useState<string>("");
+  const [longformNotice, setLongformNotice] = useState<CastSuggestionNotice | null>(null);
+  const [episodeCastReview, setEpisodeCastReview] = useState<EpisodeCastSelectionResult | null>(null);
+  const [episodePossibleMatchSelections, setEpisodePossibleMatchSelections] = useState<Record<number, string>>({});
+  const [episodeNewCharacterSelections, setEpisodeNewCharacterSelections] = useState<Record<number, boolean>>({});
+  const [isSelectingEpisodeCast, setIsSelectingEpisodeCast] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("kwebtoon_clean_pastel");
   const [selectedStyleCategory, setSelectedStyleCategory] = useState<string>("Webtoon");
   const [finalStyle, setFinalStyle] = useState<SeriesSpec['anchors']['style'] | null>(null);
@@ -1277,6 +1264,9 @@ const App: React.FC = () => {
   const generationRunIdRef = useRef(0);
   const isGeneratingPageRef = useRef(false);
   const lastNonErrorStatusRef = useRef<AppStatus>(AppStatus.IDLE);
+  const localArchiveLoadedRef = useRef(false);
+  const localArchiveSaveTimerRef = useRef<number | null>(null);
+  const [projectArchiveError, setProjectArchiveError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -1351,18 +1341,60 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if ((audienceLevel === "kids" || audienceLevel === "teen") && deliveryStyleId === "sensual_pg13") {
-      setDeliveryStyleId("standard");
-    }
-  }, [audienceLevel, deliveryStyleId]);
-
-  useEffect(() => {
     persistCastPresets(castPresets);
   }, [castPresets]);
 
   useEffect(() => {
+    persistLongformProjects(longformProjects);
+  }, [longformProjects]);
+
+  useEffect(() => {
     persistSavedComicProjects(savedProjects);
-  }, [savedProjects]);
+    if (!hasApiKey || !localArchiveLoadedRef.current) return;
+
+    if (localArchiveSaveTimerRef.current) {
+      window.clearTimeout(localArchiveSaveTimerRef.current);
+    }
+    localArchiveSaveTimerRef.current = window.setTimeout(() => {
+      localArchiveSaveTimerRef.current = null;
+      void persistSavedComicProjectsToLocalArchive(savedProjects)
+        .then(() => setProjectArchiveError(null))
+        .catch((e) => {
+          console.warn("Failed to persist local project archive:", e);
+          setProjectArchiveError(ui("로컬 프로젝트 파일 저장에 실패했어. 서버 로그를 확인해줘.", "Failed to save the local project file. Check the server log."));
+        });
+    }, 300);
+
+    return () => {
+      if (localArchiveSaveTimerRef.current) {
+        window.clearTimeout(localArchiveSaveTimerRef.current);
+        localArchiveSaveTimerRef.current = null;
+      }
+    };
+  }, [hasApiKey, savedProjects, uiLanguage]);
+
+  useEffect(() => {
+    if (!hasApiKey || localArchiveLoadedRef.current) return;
+    let cancelled = false;
+
+    void loadSavedComicProjectsFromLocalArchive()
+      .then((localProjects) => {
+        if (cancelled) return;
+        localArchiveLoadedRef.current = true;
+        setProjectArchiveError(null);
+        setSavedProjects((prev) => mergeSavedComicProjects(localProjects, prev).slice(0, MAX_SAVED_PROJECTS));
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.warn("Failed to load local project archive:", e);
+        localArchiveLoadedRef.current = true;
+        setProjectArchiveError(ui("로컬 프로젝트 파일 저장소를 불러오지 못했어. 브라우저 임시 저장으로만 동작 중이야.", "Could not load the local project file archive. Using browser fallback only."));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasApiKey, uiLanguage]);
 
   useEffect(() => {
     if (!selectedCastPresetId && castPresets.length > 0) {
@@ -1380,6 +1412,20 @@ const App: React.FC = () => {
       setSelectedSavedProjectId(savedProjects[0]?.id || "");
     }
   }, [savedProjects, selectedSavedProjectId]);
+
+  useEffect(() => {
+    if (longformProjects.length === 0) {
+      if (selectedLongformProjectId) setSelectedLongformProjectId("");
+      if (activeLongformProjectId) setActiveLongformProjectId("");
+      return;
+    }
+    if (!longformProjects.some((p) => p.id === selectedLongformProjectId)) {
+      setSelectedLongformProjectId(longformProjects[0]?.id || "");
+    }
+    if (activeLongformProjectId && !longformProjects.some((p) => p.id === activeLongformProjectId)) {
+      setActiveLongformProjectId("");
+    }
+  }, [activeLongformProjectId, longformProjects, selectedLongformProjectId]);
 
   useEffect(() => {
     const init = async () => {
@@ -1425,8 +1471,12 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (creationType !== "educational") return;
-    if (comicMode === "pure_cinematic") {
-      setComicMode("learning");
+    if (comicMode !== LEARNING_COMIC_MODE) {
+      setComicMode(LEARNING_COMIC_MODE);
+      return;
+    }
+    if (narrativeRole !== LEARNING_NARRATIVE_ROLE) {
+      setNarrativeRole(LEARNING_NARRATIVE_ROLE);
       return;
     }
     setResearchDigestText("");
@@ -1434,7 +1484,7 @@ const App: React.FC = () => {
     setResearchDigestWarnings([]);
     setResearchDigestError(null);
     setPageSuggestions(null);
-  }, [creationType, topic, questionType, comicMode, narrativeRole, introStyle]);
+  }, [creationType, topic, comicMode, narrativeRole]);
 
   useEffect(() => {
     if (creationType !== "paper") return;
@@ -1451,6 +1501,12 @@ const App: React.FC = () => {
     const nextPublicationFormat = normalizeSelectablePublicationFormat(publicationFormat, creationType);
     if (nextPublicationFormat !== publicationFormat) setPublicationFormat(nextPublicationFormat);
   }, [creationType, publicationFormat]);
+
+  useEffect(() => {
+    if (creationType !== "story" || storyInputType !== "scenario" || storyAdaptationMode !== "direct") return;
+    setStoryAdaptationMode("analyzed");
+    setStoryPageSuggestions(null);
+  }, [creationType, storyInputType, storyAdaptationMode]);
 
   useEffect(() => {
     if (stylePresets.length === 0) return;
@@ -1478,13 +1534,15 @@ const App: React.FC = () => {
     const fallback = scriptDetail === "brief" ? 1 : scriptDetail === "normal" ? 2 : 3;
     const suggestions =
       creationType === "story"
-        ? storyPageSuggestions
+        ? storyAdaptationMode === "direct"
+          ? estimateDirectStoryPageSuggestions(scriptText, storyInputType)
+          : storyPageSuggestions
         : creationType === "paper"
           ? paperBrief?.page_suggestions || null
           : pageSuggestions;
     const suggested = suggestions?.[scriptDetail];
     setTargetPageCount(clampPageCount(typeof suggested === "number" ? suggested : fallback));
-  }, [pageCountMode, scriptDetail, pageSuggestions, storyPageSuggestions, creationType, paperBrief]);
+  }, [pageCountMode, scriptDetail, pageSuggestions, storyPageSuggestions, storyAdaptationMode, scriptText, storyInputType, creationType, paperBrief]);
 
   const handleImageSizeChange = (nextSize: ImageSize) => {
     if (nextSize === imageSize) return;
@@ -1548,12 +1606,12 @@ const App: React.FC = () => {
     setRegenerateCursor(1);
     setSystemError(null);
     setGeminiReasoningEffort("medium");
+    setProductionMode("single");
     setTopic("");
-    setQuestionType("explain");
     setScriptDetail("normal");
     setPageCountMode("auto");
     setTargetPageCount(2);
-    setPublicationFormat("learning_comic");
+    setPublicationFormat(getDefaultPublicationFormat("educational"));
     setMangaColorMode("bw");
     setI2VAspectRatio("16:9");
     setToneMode("normal");
@@ -1583,6 +1641,12 @@ const App: React.FC = () => {
     setCast([createCharacter("protagonist")]);
     setProductReferenceImages([]);
     setActiveProjectId("");
+    setActiveLongformProjectId("");
+    setLongformNotice(null);
+    setEpisodeCastReview(null);
+    setEpisodePossibleMatchSelections({});
+    setEpisodeNewCharacterSelections({});
+    setIsSelectingEpisodeCast(false);
     setSelectedPresetId("kwebtoon_clean_pastel");
     setFinalStyle(null);
     setStyleReferenceImage(null);
@@ -1622,15 +1686,15 @@ const App: React.FC = () => {
 
     return {
       topic,
-      questionType,
-      comicMode,
+      questionType: LEARNING_QUESTION_TYPE,
+      comicMode: creationType === "educational" ? LEARNING_COMIC_MODE : comicMode,
       outputMode: toLegacyOutputMode(publicationFormat),
       publicationFormat,
       mangaColorMode,
       i2vAspectRatio,
       toneMode,
       toneLevel,
-      introStyle,
+      introStyle: LEARNING_INTRO_STYLE,
       language,
       audienceLevel,
       deliveryStyleId,
@@ -1643,7 +1707,7 @@ const App: React.FC = () => {
       scriptDetail,
       pageCountMode,
       targetPageCount,
-      narrativeRole,
+      narrativeRole: creationType === "educational" ? LEARNING_NARRATIVE_ROLE : narrativeRole,
       characterConsistencyMode,
       useCrossPageStyleConsistency,
       researchMode,
@@ -1664,6 +1728,7 @@ const App: React.FC = () => {
       creationType,
       scriptText,
       storyInputType,
+      storyAdaptationMode,
       ageRating,
       storyGenre,
       pacingPreference,
@@ -1740,17 +1805,24 @@ const App: React.FC = () => {
       null;
     const restoredCast = normalizeCastFromSnapshot(snapshot.cast);
     const restoredCreationType: CreationType = snapshot.creationType || "educational";
-    const restoredComicMode = snapshot.comicMode || "learning";
+    const restoredComicMode =
+      restoredCreationType === "educational"
+        ? LEARNING_COMIC_MODE
+        : snapshot.comicMode || "learning";
     const restoredOutputMode: OutputMode = snapshot.outputMode || "comic";
     const restoredRawPublicationFormat: PublicationFormat =
-      (snapshot as any).publicationFormat || (restoredOutputMode === "kling_i2v" ? "kling_i2v" : "learning_comic");
+      (snapshot as any).publicationFormat ||
+      (restoredOutputMode === "kling_i2v" ? "kling_i2v" : getDefaultPublicationFormat(restoredCreationType));
     const restoredPublicationFormat = normalizeSelectablePublicationFormat(
       restoredRawPublicationFormat,
       restoredCreationType
     );
     const restoredMangaColorMode: MangaColorMode = (snapshot as any).mangaColorMode || "bw";
     const restoredI2VAspectRatio: I2VAspectRatio = snapshot.i2vAspectRatio || "16:9";
-    const restoredNarrativeRole = snapshot.narrativeRole || "narrator";
+    const restoredNarrativeRole =
+      restoredCreationType === "educational"
+        ? LEARNING_NARRATIVE_ROLE
+        : snapshot.narrativeRole || "narrator";
     const restoredCharacterConsistencyMode = snapshot.characterConsistencyMode || "loose";
     const restoredUseCrossPageStyleConsistency = snapshot.useCrossPageStyleConsistency !== false;
     const restoredStoryAntiEducationGuardEnabled =
@@ -1808,14 +1880,12 @@ const App: React.FC = () => {
     setSystemError(null);
     setGeminiReasoningEffort(snapshot.geminiReasoningEffort || "medium");
     setTopic(snapshot.topic || "");
-    setQuestionType(snapshot.questionType || "explain");
     setComicMode(restoredComicMode);
     setPublicationFormat(restoredPublicationFormat);
     setMangaColorMode(restoredMangaColorMode);
     setI2VAspectRatio(restoredI2VAspectRatio);
     setToneMode(snapshot.toneMode || "normal");
     setToneLevel(snapshot.toneLevel || "medium");
-    setIntroStyle(snapshot.introStyle || "standard");
     setLanguage(snapshot.language || restoredPlan.series_spec.series.language || "ko");
     setBusyPhase("planning");
     setAudienceLevel(snapshot.audienceLevel || "beginner");
@@ -1834,6 +1904,7 @@ const App: React.FC = () => {
     setCreationType(restoredCreationType);
     setScriptText(snapshot.scriptText || "");
     setStoryInputType(snapshot.storyInputType || "scenario");
+    setStoryAdaptationMode(snapshot.storyAdaptationMode || "analyzed");
     setAgeRating(snapshot.ageRating || "teen");
     setStoryGenre(snapshot.storyGenre ?? null);
     setPacingPreference(snapshot.pacingPreference || "balanced");
@@ -1920,7 +1991,6 @@ const App: React.FC = () => {
     globalStyleEditedAt,
     imageProvider,
     imageSize,
-    introStyle,
     language,
     layoutVariety,
     narrativeRole,
@@ -1935,7 +2005,6 @@ const App: React.FC = () => {
     pageStyleOverrides,
     paperBrief,
     productReferenceImages,
-    questionType,
     researchDigestText,
     researchMode,
     scriptDetail,
@@ -2249,26 +2318,18 @@ const App: React.FC = () => {
     }
 
     if (creationType === "paper") {
-      if (!paperBrief) return { label: ui("논문 브리프", "Paper brief"), text: "" };
+      if (!paperBrief) return { label: ui("논문 해설 원고", "Paper story"), text: "" };
       return {
-        label: ui("논문 브리프", "Paper brief"),
+        label: ui("논문 해설 원고", "Paper story"),
         text: [
           paperBrief.paper_title,
-          paperBrief.one_line_takeaway,
-          paperBrief.motivation_context,
-          ...(paperBrief.opening_candidates || []),
-          ...(paperBrief.paper_story_units || []).map((unit) => `${unit.step}: ${unit.reader_question}`),
-          paperBrief.core_problem,
-          paperBrief.method_summary,
-          paperBrief.result_summary,
-          ...(paperBrief.main_contributions || []),
-          ...(paperBrief.limitations || [])
+          paperBrief.explainer_story
         ].filter(Boolean).join("\n")
       };
     }
 
     const digest = researchDigestText.trim();
-    if (digest) return { label: ui("GPT 다이제스트", "GPT digest"), text: digest };
+    if (digest) return { label: ui("소설형 해설 원고", "Story-style explainer"), text: digest };
     const userReport = researchReportText.trim();
     if (userReport) return { label: ui("업로드 자료", "Uploaded material"), text: userReport };
     return { label: ui("주제", "Topic"), text: topic.trim() };
@@ -2280,6 +2341,422 @@ const App: React.FC = () => {
   });
 
   const getCurrentReferenceStyle = (): SeriesSpec["anchors"]["style"] => finalStyle || resolveCurrentStyle();
+
+  const suggestLongformProjectLabel = (): string => {
+    const namedCharacters = cast
+      .map((c) => String(c.name || "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+    if (topic.trim()) return topic.trim();
+    if (namedCharacters.length > 0) return `${namedCharacters.join("+")} 세계관`;
+    return "새 장편 프로젝트";
+  };
+
+  const buildLongformSnapshot = (): SavedLongformProjectSnapshot | null => {
+    const meaningfulCast = cast.filter((c) =>
+      Boolean(
+        String(c.name || "").trim() ||
+        String(c.appearance || "").trim() ||
+        String(c.persona || "").trim() ||
+        (c.reference_images || []).filter(Boolean).length > 0
+      )
+    );
+    if (meaningfulCast.length === 0) return null;
+    return {
+      cast: compactCastForStorage(meaningfulCast),
+      selectedPresetId,
+      selectedStyleCategory,
+      finalStyle: compactStyleForStorage(finalStyle || resolveCurrentStyle()),
+      styleReferenceImage: keepPersistableImageUrl(styleReferenceImage) || null,
+      creationType,
+      comicMode,
+      publicationFormat,
+      mangaColorMode,
+      i2vAspectRatio,
+      narrativeRole: creationType === "educational" ? LEARNING_NARRATIVE_ROLE : narrativeRole,
+      characterConsistencyMode,
+      useCrossPageStyleConsistency
+    };
+  };
+
+  const getCharacterMergeKey = (character: CharacterSpec): string => {
+    const name = String(character.name || "").trim().toLowerCase();
+    if (name) return `name:${name}`;
+    return `id:${character.id}`;
+  };
+
+  const mergeLongformCast = (existingCast: CharacterSpec[], incomingCast: CharacterSpec[]): CharacterSpec[] => {
+    const merged = existingCast.map((c) => ({
+      ...c,
+      reference_images: Array.isArray(c.reference_images) ? [...c.reference_images] : [],
+      style_aligned_reference_images: Array.isArray(c.style_aligned_reference_images) ? [...c.style_aligned_reference_images] : []
+    }));
+    const indexById = new Map(merged.map((c, index) => [c.id, index]));
+    const indexByKey = new Map(merged.map((c, index) => [getCharacterMergeKey(c), index]));
+
+    for (const incoming of incomingCast) {
+      const byId = indexById.get(incoming.id);
+      const byKey = indexByKey.get(getCharacterMergeKey(incoming));
+      const targetIndex = typeof byId === "number" ? byId : byKey;
+      if (typeof targetIndex === "number") {
+        const current = merged[targetIndex];
+        const nextRefs = (incoming.reference_images || []).filter(Boolean);
+        const nextStyleRefs = (incoming.style_aligned_reference_images || []).filter(Boolean);
+        merged[targetIndex] = {
+          ...current,
+          ...incoming,
+          id: current.id,
+          reference_images: nextRefs.length > 0 ? nextRefs : current.reference_images,
+          style_aligned_reference_images: nextStyleRefs.length > 0 ? nextStyleRefs : current.style_aligned_reference_images,
+          style_aligned_reference_style_key: incoming.style_aligned_reference_style_key || current.style_aligned_reference_style_key
+        };
+      } else {
+        merged.push({
+          ...incoming,
+          id: incoming.id || createClientId(),
+          reference_images: Array.isArray(incoming.reference_images) ? [...incoming.reference_images] : [],
+          style_aligned_reference_images: Array.isArray(incoming.style_aligned_reference_images) ? [...incoming.style_aligned_reference_images] : []
+        });
+      }
+    }
+    return merged;
+  };
+
+  const upsertLongformProject = (opts?: { label?: string; forceNew?: boolean; silent?: boolean }) => {
+    const baseSnapshot = buildLongformSnapshot();
+    if (!baseSnapshot) {
+      const message = ui("보관함에 저장할 캐릭터가 없어.", "No characters to save to the library.");
+      setLongformNotice({ kind: "error", message });
+      if (!opts?.silent) setSystemError(message);
+      return;
+    }
+
+    const now = Date.now();
+    const requestedLabel = String(opts?.label || "").trim();
+    setLongformProjects((prev) => {
+      const existing = !opts?.forceNew && activeLongformProjectId
+        ? prev.find((p) => p.id === activeLongformProjectId)
+        : null;
+      const resolvedLabel = requestedLabel || existing?.label || suggestLongformProjectLabel();
+      const snapshot: SavedLongformProjectSnapshot = existing
+        ? {
+          ...baseSnapshot,
+          cast: compactCastForStorage(mergeLongformCast(existing.snapshot.cast, baseSnapshot.cast))
+        }
+        : baseSnapshot;
+      const nextProject: SavedLongformProject = existing
+        ? {
+          ...existing,
+          label: resolvedLabel,
+          updated_at: now,
+          snapshot
+        }
+        : {
+          id: createClientId(),
+          label: resolvedLabel,
+          created_at: now,
+          updated_at: now,
+          last_opened_at: now,
+          snapshot
+        };
+      setActiveLongformProjectId(nextProject.id);
+      setSelectedLongformProjectId(nextProject.id);
+      return [nextProject, ...prev.filter((p) => p.id !== nextProject.id)].slice(0, 80);
+    });
+    setLongformNotice({
+      kind: "success",
+      message: ui("현재 캐릭터와 스타일을 장편 보관함에 저장했어.", "Saved the current cast and style to the longform library."),
+      detail: ui(`${baseSnapshot.cast.length}명 반영`, `${baseSnapshot.cast.length} characters applied`)
+    });
+    if (!opts?.silent) setSystemError(null);
+  };
+
+  const promptSaveLongformProject = (forceNew = false) => {
+    const suggested = forceNew
+      ? suggestLongformProjectLabel()
+      : longformProjects.find((p) => p.id === activeLongformProjectId)?.label || suggestLongformProjectLabel();
+    const entered = window.prompt(ui("장편 프로젝트 이름", "Longform project name"), suggested);
+    if (entered === null) return;
+    upsertLongformProject({ label: entered, forceNew });
+  };
+
+  const loadLongformProject = (projectId: string) => {
+    const project = longformProjects.find((p) => p.id === projectId);
+    if (!project) return;
+    const snapshot = project.snapshot;
+    cancelInFlightGeneration();
+    setProductionMode("longform");
+    setActiveLongformProjectId(project.id);
+    setSelectedLongformProjectId(project.id);
+    setCreationType(snapshot.creationType || "story");
+    setComicMode(snapshot.comicMode || "pure_cinematic");
+    setPublicationFormat(normalizeSelectablePublicationFormat(
+      snapshot.publicationFormat || getDefaultPublicationFormat(snapshot.creationType || "story"),
+      snapshot.creationType || "story"
+    ));
+    setMangaColorMode(snapshot.mangaColorMode || "bw");
+    setI2VAspectRatio(snapshot.i2vAspectRatio || "16:9");
+    setNarrativeRole(snapshot.narrativeRole || "actor");
+    setCharacterConsistencyMode(snapshot.characterConsistencyMode || "strict");
+    setUseCrossPageStyleConsistency(snapshot.useCrossPageStyleConsistency !== false);
+    setSelectedPresetId(snapshot.selectedPresetId || "kwebtoon_clean_pastel");
+    setSelectedStyleCategory(snapshot.selectedStyleCategory || "Webtoon");
+    setFinalStyle(snapshot.finalStyle || null);
+    setStyleReferenceImage(snapshot.styleReferenceImage || snapshot.finalStyle?.style_reference_image || null);
+    setStyleReferenceError(null);
+    setCharacterInputMode("suggest");
+    setCast([createCharacter("protagonist")]);
+    setEpisodeCastReview(null);
+    setEpisodePossibleMatchSelections({});
+    setEpisodeNewCharacterSelections({});
+    setLongformNotice({
+      kind: "success",
+      message: ui(`"${project.label}" 보관함을 불러왔어.`, `Loaded "${project.label}".`),
+      detail: ui(`${snapshot.cast.length}명 보관 중. 이번 화 원고를 넣고 출연진을 자동 선택해줘.`, `${snapshot.cast.length} saved characters. Add this episode's script and select the cast.`)
+    });
+    setSystemError(null);
+  };
+
+  const deleteLongformProject = (projectId: string) => {
+    const project = longformProjects.find((p) => p.id === projectId);
+    if (!project) return;
+    if (!window.confirm(`"${project.label}" 장편 프로젝트를 삭제할까?`)) return;
+    setLongformProjects((prev) => prev.filter((p) => p.id !== projectId));
+    if (activeLongformProjectId === projectId) {
+      setActiveLongformProjectId("");
+      setEpisodeCastReview(null);
+      setEpisodePossibleMatchSelections({});
+      setEpisodeNewCharacterSelections({});
+    }
+  };
+
+  const cloneCharacterForEpisode = (source: CharacterSpec, role?: CastRole): CharacterSpec => ({
+    ...source,
+    id: createClientId(),
+    role: role || source.role,
+    reference_images: Array.isArray(source.reference_images) ? [...source.reference_images] : [],
+    style_aligned_reference_images: Array.isArray(source.style_aligned_reference_images) ? [...source.style_aligned_reference_images] : []
+  });
+
+  const normalizeEpisodeCast = (items: CharacterSpec[]): CharacterSpec[] => {
+    const clean = items.filter((c) =>
+      Boolean(String(c.name || c.appearance || c.persona || "").trim() || (c.reference_images || []).length > 0)
+    );
+    if (clean.length === 0) return [createCharacter("protagonist")];
+    const protagonists = clean.filter((c) => c.role === "protagonist").slice(0, 2);
+    const supporting = clean.filter((c) => c.role === "supporting");
+    if (protagonists.length > 0) return [...protagonists, ...supporting];
+    const [first, ...rest] = clean;
+    return [{ ...first, role: "protagonist" }, ...rest.map((c) => ({ ...c, role: "supporting" as CastRole }))];
+  };
+
+  const createCharacterFromEpisodeCandidate = (
+    candidate: EpisodeCastSelectionResult["new_character_candidates"][number]
+  ): CharacterSpec => ({
+    ...createCharacter(candidate.role, candidate.name),
+    appearance: candidate.appearance || candidate.visual_prompt,
+    persona: [candidate.persona, candidate.story_function].filter(Boolean).join("\n"),
+    catchphrase: candidate.catchphrase || "",
+    catchphrase_frequency: "rare",
+    reference_images: []
+  });
+
+  const getSelectedNewEpisodeCandidates = (): EpisodeCastSelectionResult["new_character_candidates"] => {
+    if (!episodeCastReview) return [];
+    return episodeCastReview.new_character_candidates.filter((_, index) => episodeNewCharacterSelections[index] !== false);
+  };
+
+  const runEpisodeCastSelection = async () => {
+    if (isSelectingEpisodeCast) return;
+    const project = longformProjects.find((p) => p.id === activeLongformProjectId);
+    if (!project) {
+      const message = ui("먼저 장편 프로젝트를 불러와줘.", "Load a longform project first.");
+      setLongformNotice({ kind: "error", message });
+      return;
+    }
+    if (!hasApiKey) {
+      const message = ui("출연진 자동 선택에는 로컬 서버와 Codex 로그인이 필요해.", "Episode cast selection requires the local server and Codex login.");
+      setLongformNotice({ kind: "error", message });
+      setSystemError(message);
+      return;
+    }
+    if (scriptText.trim().length < STORY_MIN_INPUT_CHARS) {
+      const message = ui(`이번 화 소설/원고를 먼저 ${STORY_MIN_INPUT_CHARS}자 이상 입력해줘.`, `Add at least ${STORY_MIN_INPUT_CHARS} characters of this episode's script first.`);
+      setLongformNotice({ kind: "error", message });
+      return;
+    }
+
+    setIsSelectingEpisodeCast(true);
+    setEpisodeCastReview(null);
+    setEpisodePossibleMatchSelections({});
+    setEpisodeNewCharacterSelections({});
+    setLongformNotice({
+      kind: "info",
+      message: ui("이번 화 원고에서 출연진을 찾는 중이야.", "Finding this episode's cast from the script."),
+      detail: ui(`${project.snapshot.cast.length}명 보관함과 비교 중`, `Comparing against ${project.snapshot.cast.length} saved characters`)
+    });
+    try {
+      const selectedStyle = resolveCurrentStyle();
+      const result = await analyzeEpisodeCastFromLibrary({
+        episode_text: scriptText,
+        character_library: project.snapshot.cast,
+        publication_format: publicationFormat,
+        story_genre: storyGenre || undefined,
+        story_input_type: storyInputType,
+        age_rating: ageRating,
+        selected_style: {
+          preset_id: selectedStyle.preset_id,
+          preset_label: selectedStyle.preset_label,
+          render_mode: selectedStyle.render_mode,
+          style_prompt: selectedStyle.style_prompt,
+          user_style_prompt: selectedStyle.user_style_prompt
+        }
+      });
+      setEpisodeCastReview(result);
+      setEpisodePossibleMatchSelections(
+        Object.fromEntries(
+          result.possible_matches.map((match, index) => [index, match.candidate_character_ids[0] || "__skip__"])
+        )
+      );
+      setEpisodeNewCharacterSelections(
+        Object.fromEntries(result.new_character_candidates.map((_, index) => [index, true]))
+      );
+      const matchedCount = result.matched_existing_characters.length;
+      const possibleCount = result.possible_matches.length;
+      const newCount = result.new_character_candidates.length;
+      setLongformNotice({
+        kind: "success",
+        message: ui(
+          `기존 ${matchedCount}명, 확인 필요 ${possibleCount}건, 신규 ${newCount}명을 찾았어.`,
+          `Found ${matchedCount} existing, ${possibleCount} possible, and ${newCount} new character${newCount === 1 ? "" : "s"}.`
+        )
+      });
+      setSystemError(null);
+    } catch (e: any) {
+      const detail = toUserFacingError(e?.message, ui("이번 화 출연진 분석에 실패했어.", "Episode cast selection failed."), uiLanguage);
+      setLongformNotice({
+        kind: "error",
+        message: ui("이번 화 출연진을 자동 선택하지 못했어.", "Could not select this episode's cast."),
+        detail
+      });
+      setSystemError(detail);
+    } finally {
+      setIsSelectingEpisodeCast(false);
+    }
+  };
+
+  const applyEpisodeCastReview = (includeNewCharacters = true) => {
+    const project = longformProjects.find((p) => p.id === activeLongformProjectId);
+    if (!project || !episodeCastReview) return;
+    const libraryById = new Map<string, CharacterSpec>(
+      project.snapshot.cast.map((c): [string, CharacterSpec] => [c.id, c])
+    );
+    const picked: CharacterSpec[] = [];
+    const pickedIds = new Set<string>();
+
+    for (const match of episodeCastReview.matched_existing_characters) {
+      const source = libraryById.get(match.character_id);
+      if (!source || pickedIds.has(source.id)) continue;
+      picked.push(cloneCharacterForEpisode(source, match.role));
+      pickedIds.add(source.id);
+    }
+
+    for (const [index, possible] of episodeCastReview.possible_matches.entries()) {
+      const selectedId = episodePossibleMatchSelections[index] || possible.candidate_character_ids[0] || "__skip__";
+      if (selectedId === "__skip__") continue;
+      const source = libraryById.get(selectedId);
+      if (!source || pickedIds.has(source.id)) continue;
+      picked.push(cloneCharacterForEpisode(source));
+      pickedIds.add(source.id);
+    }
+
+    if (includeNewCharacters) {
+      for (const candidate of getSelectedNewEpisodeCandidates()) {
+        picked.push(createCharacterFromEpisodeCandidate(candidate));
+      }
+    }
+
+    const nextCast = normalizeEpisodeCast(picked);
+    setCast(nextCast);
+    setCharacterConsistencyMode("strict");
+    setCharacterInputMode("manual");
+    setCastSuggestionNotice({
+      kind: "success",
+      message: ui(`이번 화 출연진 ${nextCast.length}명을 적용했어.`, `Applied ${nextCast.length} episode character${nextCast.length === 1 ? "" : "s"}.`),
+      detail: includeNewCharacters && getSelectedNewEpisodeCandidates().length > 0
+        ? ui("신규 인물은 캐릭터 카드에서 확인하고 필요하면 AI 이미지까지 만든 뒤 보관함에 다시 저장해줘.", "Review new characters in the cards, generate references if needed, then save them back to the library.")
+        : undefined
+    });
+    setLongformNotice({
+      kind: "success",
+      message: ui("이번 화 출연진을 캐릭터 설정에 적용했어.", "Applied this episode's cast to character setup.")
+    });
+    setStatus(AppStatus.CHARACTER_SELECT);
+  };
+
+  const addSelectedEpisodeNewCharactersToLibrary = () => {
+    const project = longformProjects.find((p) => p.id === activeLongformProjectId);
+    if (!project || !episodeCastReview) return;
+    const selectedCandidates = getSelectedNewEpisodeCandidates();
+    if (selectedCandidates.length === 0) {
+      setLongformNotice({
+        kind: "error",
+        message: ui("보관함에 추가할 신규 인물을 선택해줘.", "Select new characters to add to the library.")
+      });
+      return;
+    }
+
+    const newCharacters = selectedCandidates.map(createCharacterFromEpisodeCandidate);
+    setLongformProjects((prev) => prev.map((p) => {
+      if (p.id !== project.id) return p;
+      const mergedCast = compactCastForStorage(mergeLongformCast(p.snapshot.cast, newCharacters));
+      return {
+        ...p,
+        updated_at: Date.now(),
+        snapshot: {
+          ...p.snapshot,
+          cast: mergedCast
+        }
+      };
+    }));
+    setLongformNotice({
+      kind: "success",
+      message: ui(`신규 인물 ${newCharacters.length}명을 보관함 초안으로 추가했어.`, `Added ${newCharacters.length} new character draft${newCharacters.length === 1 ? "" : "s"} to the library.`),
+      detail: ui("레퍼런스 이미지는 캐릭터 설정 화면에서 만든 뒤 보관함 업데이트로 보강하면 돼.", "Generate reference images in character setup, then update the library to enrich them.")
+    });
+  };
+
+  const enterSingleMode = () => {
+    setProductionMode("single");
+    setLongformNotice(null);
+  };
+
+  const enterNewLongformMode = () => {
+    setProductionMode("new_longform");
+    setCreationType("story");
+    setNarrativeRole(getDefaultNarrativeRole("story"));
+    setComicMode("pure_cinematic");
+    setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
+    setActiveLongformProjectId("");
+    setEpisodeCastReview(null);
+    setEpisodePossibleMatchSelections({});
+    setEpisodeNewCharacterSelections({});
+    setLongformNotice({
+      kind: "info",
+      message: ui("1화를 만든 뒤 캐릭터 설정에서 장편 보관함으로 저장하면 돼.", "Make episode 1, then save the cast and style as a longform library in character setup.")
+    });
+  };
+
+  const enterLongformMode = () => {
+    setProductionMode("longform");
+    setCreationType("story");
+    setNarrativeRole(getDefaultNarrativeRole("story"));
+    setComicMode("pure_cinematic");
+    setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
+    if (!activeLongformProject && longformProjects.length > 0) {
+      setSelectedLongformProjectId(longformProjects.slice().sort((a, b) => b.updated_at - a.updated_at)[0]?.id || "");
+    }
+  };
 
   const applyContentCastSuggestions = async () => {
     if (isSuggestingCastFromContent) return;
@@ -2296,7 +2773,7 @@ const App: React.FC = () => {
 
     const source = buildContentSourceForCast();
     if (!source.text || source.text.length < 2) {
-      const message = ui("먼저 주제, 다이제스트, 스토리, 논문 브리프 중 하나가 필요해.", "Add a topic, digest, story, or paper brief first.");
+      const message = ui("먼저 주제나 해설 원고가 필요해.", "Add a topic or story draft first.");
       setCastSuggestionNotice({ kind: "error", message });
       setSystemError(message);
       return;
@@ -2852,6 +3329,20 @@ const App: React.FC = () => {
     }
   };
 
+  const suggestPagesFromNarrative = async (narrativeText: string, subject: string) => {
+    const trimmed = narrativeText.trim();
+    if (!trimmed) return null;
+    try {
+      return await suggestNarrativePageCounts({
+        narrative_text: trimmed,
+        subject
+      });
+    } catch (e) {
+      console.warn("Failed to suggest page counts from narrative", e);
+      return null;
+    }
+  };
+
   const handleAnalyzeResearch = async () => {
     if (isResearchAnalyzing) return;
     const materialText = researchReportText.trim();
@@ -2872,25 +3363,18 @@ const App: React.FC = () => {
       const result = hasUserMaterial
         ? await analyzeResearchReport({
           topic: effectiveTopic,
-          question_type: questionType,
-          comic_mode: comicMode,
-          character_role: narrativeRole,
-          intro_style: introStyle,
           report_text: researchReportText,
           file: researchReportFile || undefined
         })
         : await generateGeminiResearchPack({
           topic: effectiveTopic,
-          question_type: questionType,
-          comic_mode: comicMode,
-          character_role: narrativeRole,
-          intro_style: introStyle,
           reasoning_effort: geminiReasoningEffort
         });
-      const suggestions = result.page_suggestions || null;
       setResearchDigestText(result.notes);
       setResearchDigestSources("sources" in result && Array.isArray(result.sources) ? result.sources : []);
       setResearchDigestWarnings("warnings" in result && Array.isArray(result.warnings) ? result.warnings : []);
+      const suggestionResult = await suggestPagesFromNarrative(result.notes, effectiveTopic);
+      const suggestions = suggestionResult?.page_suggestions || null;
       setPageSuggestions(suggestions);
       if (pageCountMode === "auto" && suggestions) {
         const suggested = suggestions[scriptDetail];
@@ -2904,7 +3388,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalyzeStory = async () => {
-    if (isStoryAnalyzing || scriptText.trim().length < 50) return;
+    if (isStoryAnalyzing || scriptText.trim().length < STORY_MIN_INPUT_CHARS) return;
     setIsStoryAnalyzing(true);
     setStoryDigestError(null);
     setStoryDigestWarnings([]);
@@ -2919,14 +3403,39 @@ const App: React.FC = () => {
         age_rating: ageRating,
         publication_format: publicationFormat
       });
+      setStoryAdaptationMode("analyzed");
       setStoryDigestText(result.notes);
       setStoryDigestWarnings(result.warnings);
       setStoryPageSuggestions(result.page_suggestions);
     } catch (e: any) {
-      setStoryDigestError(e?.message || ui("스토리 분석에 실패했어.", "Story analysis failed."));
+      setStoryDigestError(e?.message || ui("AI 각색에 실패했어.", "AI adaptation failed."));
     } finally {
       setIsStoryAnalyzing(false);
     }
+  };
+
+  const handleUseStoryAsIs = () => {
+    if (storyInputType === "scenario") return;
+    if (scriptText.trim().length < STORY_MIN_INPUT_CHARS) return;
+    const suggestions = estimateDirectStoryPageSuggestions(scriptText, storyInputType);
+    setStoryAdaptationMode("direct");
+    setStoryDigestText("");
+    setStoryDigestWarnings([]);
+    setStoryDigestError(null);
+    setStoryPageSuggestions(suggestions);
+    if (pageCountMode === "auto") {
+      setTargetPageCount(clampPageCount(suggestions[scriptDetail]));
+    }
+  };
+
+  const handleStoryInputTypeChange = (nextType: StoryInputType) => {
+    if (nextType === storyInputType) return;
+    setStoryInputType(nextType);
+    setStoryAdaptationMode("analyzed");
+    setStoryDigestText("");
+    setStoryDigestWarnings([]);
+    setStoryDigestError(null);
+    setStoryPageSuggestions(null);
   };
 
   const runPaperAnalysis = async (file: File) => {
@@ -2936,12 +3445,20 @@ const App: React.FC = () => {
     setPaperBrief(null);
 
     try {
-      const result = await analyzePaperPdf({
+      const rawResult = await analyzePaperPdf({
         file,
         audience_level: audienceLevel,
         detail_level: scriptDetail,
         publication_format: publicationFormat
       });
+      const pageSuggestion = await suggestPagesFromNarrative(rawResult.explainer_story, rawResult.paper_title || file.name);
+      const result = pageSuggestion
+        ? {
+          ...rawResult,
+          page_suggestions: pageSuggestion.page_suggestions,
+          page_division_note: pageSuggestion.page_division_note
+        }
+        : rawResult;
       setPaperBrief(result);
       setTopic(result.paper_title || "");
       if (pageCountMode === "auto") {
@@ -2977,12 +3494,20 @@ const App: React.FC = () => {
     setPaperUrl(url);
 
     try {
-      const result = await analyzePaperUrl({
+      const rawResult = await analyzePaperUrl({
         url,
         audience_level: audienceLevel,
         detail_level: scriptDetail,
         publication_format: publicationFormat
       });
+      const pageSuggestion = await suggestPagesFromNarrative(rawResult.explainer_story, rawResult.paper_title || url);
+      const result = pageSuggestion
+        ? {
+          ...rawResult,
+          page_suggestions: pageSuggestion.page_suggestions,
+          page_division_note: pageSuggestion.page_division_note
+        }
+        : rawResult;
       setPaperBrief(result);
       setTopic(result.paper_title || "");
       if (pageCountMode === "auto") {
@@ -3016,7 +3541,11 @@ const App: React.FC = () => {
     };
     if (!effectiveStyle) return;
     if (creationType === "story") {
-      if (scriptText.trim().length < 50) return;
+      if (scriptText.trim().length < STORY_MIN_INPUT_CHARS) return;
+      if (storyInputType === "scenario" && !storyDigestText.trim()) {
+        setSystemError(ui("상황/설정 입력은 먼저 AI 각색을 해줘.", "Scenario input needs AI adaptation first."));
+        return;
+      }
     } else if (creationType === "paper") {
       if (!paperBrief) return;
     } else {
@@ -3097,6 +3626,7 @@ const App: React.FC = () => {
         plan = await generateStoryPlan({
           script_text: scriptText,
           story_input_type: storyInputType,
+          story_adaptation_mode: storyAdaptationMode,
           genre: storyGenre || undefined,
           pacing: pacingPreference,
           age_rating: ageRating,
@@ -3129,7 +3659,8 @@ const App: React.FC = () => {
           cast,
           style: effectiveStyle,
           templates: templatesForPlan,
-          digest_notes: storyDigestText.trim() || undefined,
+          digest_notes: storyAdaptationMode === "analyzed" ? storyDigestText.trim() || undefined : undefined,
+          use_story_outline: storyAdaptationMode !== "direct",
           gemini_reasoning_effort: geminiReasoningEffort,
         });
       } else if (creationType === "paper") {
@@ -3184,15 +3715,15 @@ const App: React.FC = () => {
         }
         plan = await generatePlan({
           topic,
-          question_type: questionType,
-          comic_mode: comicMode,
+          question_type: LEARNING_QUESTION_TYPE,
+          comic_mode: LEARNING_COMIC_MODE,
           output_mode: toLegacyOutputMode(publicationFormat),
           publication_format: publicationFormat,
           manga_color_mode: mangaColorMode,
           i2v_aspect_ratio: i2vAspectRatio,
           tone_mode: toneMode,
           tone_level: toneLevel,
-          intro_style: introStyle,
+          intro_style: LEARNING_INTRO_STYLE,
           detail_level: scriptDetail,
           language,
           audience_level: audienceLevel,
@@ -3201,13 +3732,13 @@ const App: React.FC = () => {
             preset_id: deliveryStyleId,
             custom_instruction: deliveryCustomInstruction,
             audience_level: audienceLevel,
-            comic_mode: comicMode
+            comic_mode: LEARNING_COMIC_MODE
           }),
           layout_variety: layoutVariety,
           image_size: imageSize,
           page_count: effectivePageCount,
           character_description: primaryAppearance,
-          character_role: narrativeRole,
+          character_role: LEARNING_NARRATIVE_ROLE,
           character_refs: { main: primaryRefs[0] || "", pack: primaryRefs },
           product:
             productReferenceImages.length > 0
@@ -3653,10 +4184,12 @@ const App: React.FC = () => {
 
   const castProtagonists = cast.filter((c) => c.role === "protagonist");
   const castSupporting = cast.filter((c) => c.role === "supporting");
+  const activeLongformProject = longformProjects.find((p) => p.id === activeLongformProjectId) || null;
+  const selectedLongformProject = longformProjects.find((p) => p.id === selectedLongformProjectId) || null;
+  const activeLongformCharactersById = new Map<string, CharacterSpec>(
+    (activeLongformProject?.snapshot.cast || []).map((c): [string, CharacterSpec] => [c.id, c])
+  );
   const isPaperSelected = creationType === "paper";
-  const isEduCinematicSelected = isEduCinematicMode(comicMode);
-  const isPureCinematicSelected = isPureCinematicMode(comicMode);
-  const isAnyCinematicSelected = isAnyCinematicMode(comicMode);
   const isI2VSelected = isKlingI2VFormat(publicationFormat);
   const isLearningComicSelected = isLearningComic(publicationFormat);
   const isWebtoonSelected = isWebtoon(publicationFormat);
@@ -3698,9 +4231,13 @@ const App: React.FC = () => {
   const nextPendingPage = seriesPlan?.pages.find((page) => !pageResultsMap.has(page.page.index)) || null;
   const generatedPageCount = pageResults.length;
   const isTopicRequiredMissing = creationType === "educational" && !topic.trim();
+  const storyInputMeetsMinimum = scriptText.trim().length >= STORY_MIN_INPUT_CHARS;
+  const isScenarioStoryInput = creationType === "story" && storyInputType === "scenario";
+  const canUseStoryDirectly = creationType === "story" && storyInputType !== "scenario";
+  const hasRequiredStoryAdaptation = !isScenarioStoryInput || (storyAdaptationMode === "analyzed" && Boolean(storyDigestText.trim()));
   const canProceedMissionSetup =
     creationType === "story"
-      ? scriptText.trim().length >= 50 && !isStoryAnalyzing
+      ? storyInputMeetsMinimum && !isStoryAnalyzing && hasRequiredStoryAdaptation
       : creationType === "paper"
         ? Boolean(paperBrief) && !isPaperAnalyzing
         : (
@@ -3717,8 +4254,6 @@ const App: React.FC = () => {
     stylePresets.length > 0 &&
     hasApiKey;
   const selectedStylePresetForDisplay = stylePresets.find((p) => p.id === selectedPresetId);
-  const paperTrackLabel =
-    paperBrief?.paper_mode_track === "methodology_focus" ? "방법론 중심" : "대중형 요약";
 
   if (!hasApiKey) {
     return (
@@ -3746,12 +4281,10 @@ const App: React.FC = () => {
     const lines: string[] = [];
     lines.push(`created_at: ${createdAt || "(unknown)"}`);
     lines.push(`topic: ${topic || "(empty)"}`);
-    lines.push(`question_type: ${questionType}`);
     lines.push(`comic_mode: ${comicMode} (${getComicModeDisplayLabel(comicMode)})`);
     lines.push(`publication_format: ${publicationFormat}`);
     lines.push(`i2v_aspect_ratio: ${i2vAspectRatio}`);
     lines.push(`tone_mode: ${toneMode}${toneMode === "gag" ? `(${toneLevel})` : ""}`);
-    lines.push(`intro_style: ${introStyle}`);
     lines.push(`audience_level: ${audienceLevel}`);
     lines.push(`research_mode: ${researchMode}`);
     lines.push(`planner_model: ${GEMINI_PLANNER_MODEL}`);
@@ -3815,6 +4348,17 @@ const App: React.FC = () => {
                 </p>
               ) : (
                 <p className="text-[10px] font-bold text-slate-400 mt-2">{ui("현재는 새 프로젝트 상태야.", "This is a new project.")}</p>
+              )}
+              {projectArchiveError ? (
+                <p className="mt-2 text-[10px] font-black text-red-600">
+                  {projectArchiveError}
+                </p>
+              ) : (
+                <p className="mt-2 text-[10px] font-bold text-slate-400">
+                  {hasApiKey
+                    ? ui("로컬 파일 보관함에 저장돼.", "Saved to the local file archive.")
+                    : ui("로컬 서버 연결 전에는 브라우저 임시 저장만 사용해.", "Browser fallback is used until the local server connects.")}
+                </p>
               )}
             </div>
             <div className="w-full md:w-auto">
@@ -3935,6 +4479,53 @@ const App: React.FC = () => {
               <span>{selectedStylePresetForDisplay?.label || selectedPresetId}</span>
             </div>
 
+            <div className="mb-8 border-2 border-indigo-600 bg-indigo-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-black text-indigo-800 uppercase flex items-center gap-2">
+                    <BookOpen size={15} /> {ui("캐릭터 보관함", "Character Library")}
+                  </p>
+                  <p className="mt-1 text-[10px] font-bold text-slate-600">
+	                    {activeLongformProject
+	                      ? ui(`${activeLongformProject.label} · 보관 캐릭터 ${activeLongformProject.snapshot.cast.length}명`, `${activeLongformProject.label} · ${activeLongformProject.snapshot.cast.length} saved characters`)
+	                      : productionMode === "new_longform"
+	                        ? ui("1화 캐릭터와 그림체가 정해지면 여기서 장편 보관함을 만들어.", "Once episode 1 cast and style are set, create the longform library here.")
+	                        : ui("현재 캐릭터와 그림체를 장편 프로젝트로 저장할 수 있어.", "Save the current cast and style as a longform project.")}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => promptSaveLongformProject(false)}
+                    className="bg-black text-white px-4 py-2 text-[10px] font-black border-2 border-black hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                  >
+	                    <Save size={14} /> {activeLongformProject ? ui("보관함 업데이트", "Update Library") : productionMode === "new_longform" ? ui("새 장편 시작 저장", "Save New Longform") : ui("장편 저장", "Save Longform")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => promptSaveLongformProject(true)}
+                    className="border-2 border-black bg-white px-4 py-2 text-[10px] font-black hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus size={14} /> {ui("새 장편으로 저장", "Save As New")}
+                  </button>
+                </div>
+              </div>
+              {longformNotice && (
+                <div
+                  className={`mt-3 border-2 p-3 text-[10px] font-bold ${
+                    longformNotice.kind === "error"
+                      ? "border-red-500 bg-red-50 text-red-900"
+                      : longformNotice.kind === "success"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+                        : "border-indigo-600 bg-white text-slate-800"
+                  }`}
+                >
+                  <p className="font-black">{longformNotice.message}</p>
+                  {longformNotice.detail && <p className="mt-1 whitespace-pre-wrap">{longformNotice.detail}</p>}
+                </div>
+              )}
+            </div>
+
             <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
               <p className="text-sm font-black text-gray-700 uppercase mb-4 flex items-center gap-2">
                 <UserCheck size={18} className="text-blue-600" /> {ui("캐릭터 만드는 방법", "Character Setup Method")}
@@ -4022,28 +4613,42 @@ const App: React.FC = () => {
                     {ui("현재 모드 기본값", "Mode Default")}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setNarrativeRole("narrator")}
-                    className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "narrator" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
-                  >
-                    <div className="bg-blue-600 text-white p-2 rounded-lg"><MessageSquareText size={20} /></div>
-                    <div className="text-left">
-                      <p className="font-black text-sm uppercase">{ui("설명하는 가이드", "Guide / Narrator")}</p>
+                {creationType === "educational" ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-start gap-4 p-4 border-4 border-blue-600 bg-blue-50">
+                      <div className="bg-blue-600 text-white p-2 rounded-lg"><MessageSquareText size={20} /></div>
+                      <div className="text-left">
+                        <p className="font-black text-sm uppercase">{ui("설명하는 가이드", "Guide / Narrator")}</p>
+                        <p className="mt-1 text-[11px] font-bold text-slate-600">
+                          {ui("학습만화는 이 역할로 고정돼. 궁금증을 따라가며 쉽게 풀어주는 방식으로 진행해.", "Learning comics stay on this role so the explanation can unfold clearly." )}
+                        </p>
+                      </div>
                     </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNarrativeRole("actor")}
-                    className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "actor" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
-                  >
-                    <div className="bg-black text-white p-2 rounded-lg"><User size={20} /></div>
-                    <div className="text-left">
-                      <p className="font-black text-sm uppercase">{ui("직접 연기하는 배우", "Actor / Performer")}</p>
-                    </div>
-                  </button>
-                </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setNarrativeRole("narrator")}
+                      className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "narrator" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                    >
+                      <div className="bg-blue-600 text-white p-2 rounded-lg"><MessageSquareText size={20} /></div>
+                      <div className="text-left">
+                        <p className="font-black text-sm uppercase">{ui("설명하는 가이드", "Guide / Narrator")}</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNarrativeRole("actor")}
+                      className={`flex items-start gap-4 p-4 border-4 transition-all ${narrativeRole === "actor" ? "border-blue-600 bg-blue-50" : "border-black bg-white hover:bg-gray-50"}`}
+                    >
+                      <div className="bg-black text-white p-2 rounded-lg"><User size={20} /></div>
+                      <div className="text-left">
+                        <p className="font-black text-sm uppercase">{ui("직접 연기하는 배우", "Actor / Performer")}</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-6 bg-slate-50 border-2 border-black">
@@ -4335,54 +4940,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {creationType === "educational" && questionType === "review" && (
-            <div className="mt-8 p-6 bg-slate-50 border-2 border-black">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <p className="text-sm font-black text-gray-700 uppercase flex items-center gap-2">
-                <Upload size={18} className="text-blue-600" /> {ui("상품 사진(리뷰 모드용, 선택)", "Product Photo (Optional for Review)")}
-                </p>
-                <p className="text-[10px] font-bold text-slate-600">
-                  {productReferenceImages.length}/{MAX_PRODUCT_REF_IMAGES}
-                </p>
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                id="product-img"
-                className="hidden"
-                onChange={(e) => {
-                  void addProductReferenceImages(e.target.files);
-                  e.currentTarget.value = "";
-                }}
-              />
-              <label
-                htmlFor="product-img"
-                className="inline-block bg-black text-white px-4 py-2 font-black cursor-pointer hover:bg-blue-600 transition-colors text-[10px] md:text-xs"
-              >
-                {ui("상품 사진 업로드", "Upload Product Photo")}
-              </label>
-
-              {productReferenceImages.length > 0 ? (
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {productReferenceImages.map((url, idx) => (
-                    <div key={`product_ref_${idx}`} className="relative border-2 border-black bg-white overflow-hidden aspect-square">
-                      <img src={url} alt={`product ref ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeProductReferenceImage(idx)}
-                        className="absolute top-1 right-1 bg-white border-2 border-black p-1 hover:bg-slate-100"
-                        title={ui("삭제", "Remove")}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            )}
-
             <div className="mt-12 flex flex-col items-end gap-3">
               <p className={`text-[10px] md:text-xs font-black ${canProceedCharacterSetup ? "text-emerald-700" : "text-slate-500"}`}>
                 {canProceedCharacterSetup
@@ -4394,7 +4951,7 @@ const App: React.FC = () => {
                 disabled={!canGeneratePlan}
                 className={`px-10 py-5 font-black flex items-center gap-2 uppercase italic transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${creationType === "story" ? "bg-violet-600 text-white hover:bg-violet-700" : creationType === "paper" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}
               >
-                {creationType === "story" ? ui("각색하고 플랜 생성", "Adapt & Plan") : creationType === "paper" ? ui("계속해서 플랜 생성", "Continue & Plan") : ui("분석하고 플랜 생성", "Analyze & Plan")} <ArrowRight />
+                {creationType === "story" ? ui("각색하고 플랜 생성", "Adapt & Plan") : creationType === "paper" ? ui("계속해서 플랜 생성", "Continue & Plan") : ui("원고로 플랜 생성", "Plan from story")} <ArrowRight />
               </button>
             </div>
           </div>
@@ -4547,14 +5104,109 @@ const App: React.FC = () => {
               <h2 className="text-2xl md:text-3xl font-black mb-8 uppercase">{ui("01. 작업 설정", "01. The Mission")}</h2>
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
+                <p className="text-[10px] font-black uppercase text-slate-600 mb-3">{ui("작업 방식", "Workflow")}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={enterSingleMode}
+                    className={`flex items-center gap-3 px-4 py-3 border-4 transition-all text-left ${productionMode === "single" ? "border-black bg-white" : "border-slate-300 bg-white hover:border-black"}`}
+                  >
+                    <div className={`${productionMode === "single" ? "bg-black text-white" : "bg-slate-100 text-slate-600"} p-2 rounded-lg`}>
+                      <Sparkles size={18} />
+                    </div>
+                    <p className="min-w-0 text-sm font-black uppercase leading-tight">{ui("새 작업", "New Single Work")}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={enterNewLongformMode}
+                    className={`flex items-center gap-3 px-4 py-3 border-4 transition-all text-left ${productionMode === "new_longform" ? "border-violet-700 bg-violet-50" : "border-slate-300 bg-white hover:border-violet-700"}`}
+                  >
+                    <div className={`${productionMode === "new_longform" ? "bg-violet-700 text-white" : "bg-violet-50 text-violet-700"} p-2 rounded-lg`}>
+                      <Plus size={18} />
+                    </div>
+                    <p className="min-w-0 text-sm font-black uppercase leading-tight">{ui("새 장편 시작", "Start Longform")}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={enterLongformMode}
+                    className={`flex items-center gap-3 px-4 py-3 border-4 transition-all text-left ${productionMode === "longform" ? "border-indigo-700 bg-indigo-50" : "border-slate-300 bg-white hover:border-indigo-700"}`}
+                  >
+                    <div className={`${productionMode === "longform" ? "bg-indigo-700 text-white" : "bg-indigo-50 text-indigo-700"} p-2 rounded-lg`}>
+                      <BookOpen size={18} />
+                    </div>
+                    <p className="min-w-0 text-sm font-black uppercase leading-tight">{ui("장편 이어 만들기", "Continue Longform")}</p>
+                  </button>
+                </div>
+              </div>
+
+              {productionMode === "longform" && (
+                <div className="mb-8 p-6 bg-indigo-50 border-2 border-black">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+                    <div>
+                      <p className="text-xs font-black text-indigo-800 uppercase flex items-center gap-2">
+                        <BookOpen size={16} /> {ui("장편 이어 만들기", "Continue Longform")}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-600">
+                        {activeLongformProject
+                          ? ui(`${activeLongformProject.label} · 보관 캐릭터 ${activeLongformProject.snapshot.cast.length}명 · 저장 스타일 적용`, `${activeLongformProject.label} · ${activeLongformProject.snapshot.cast.length} saved characters · saved style applied`)
+                          : ui("장편 프로젝트를 불러온 뒤, 아래에 이번 화 원고를 넣어.", "Load a longform project, then paste this episode's script below.")}
+                      </p>
+                    </div>
+                    <span className="w-fit border-2 border-indigo-700 bg-white px-3 py-1 text-[10px] font-black text-indigo-800 uppercase">
+                      {ui("스토리 모드", "Story Mode")}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
+                    <select
+                      value={selectedLongformProjectId}
+                      onChange={(e) => setSelectedLongformProjectId(e.target.value)}
+                      className="w-full border-2 border-black bg-white px-3 py-2 text-xs font-black outline-none focus:bg-indigo-50"
+                    >
+                      <option value="">
+                        {longformProjects.length > 0 ? ui("(장편 프로젝트 선택)", "(Select longform project)") : ui("(저장된 장편 없음)", "(No saved longform projects)")}
+                      </option>
+                      {longformProjects
+                        .slice()
+                        .sort((a, b) => b.updated_at - a.updated_at)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label} · {p.snapshot.cast.length}{ui("명", "")}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => selectedLongformProject && loadLongformProject(selectedLongformProject.id)}
+                      disabled={!selectedLongformProject}
+                      className="bg-indigo-700 text-white px-4 py-2 text-xs font-black border-2 border-black hover:bg-indigo-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <FolderOpen size={14} /> {ui("장편 불러오기", "Load Longform")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectedLongformProject && deleteLongformProject(selectedLongformProject.id)}
+                      disabled={!selectedLongformProject}
+                      className="border-2 border-black bg-white px-4 py-2 text-xs font-black hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} /> {ui("삭제", "Delete")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {productionMode === "single" && (
+              <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("제작 유형", "Creation Type")}</p>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => {
+                      enterSingleMode();
                       setCreationType("educational");
-                      setNarrativeRole(getDefaultNarrativeRole("educational"));
+                      setNarrativeRole(LEARNING_NARRATIVE_ROLE);
+                      setPublicationFormat(getDefaultPublicationFormat("educational"));
                       setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
-                      if (comicMode === "pure_cinematic") setComicMode("learning");
+                      if (comicMode !== LEARNING_COMIC_MODE) setComicMode(LEARNING_COMIC_MODE);
                     }}
                     className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "educational" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
@@ -4562,8 +5214,10 @@ const App: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      enterSingleMode();
                       setCreationType("story");
                       setNarrativeRole(getDefaultNarrativeRole("story"));
+                      setPublicationFormat(getDefaultPublicationFormat("story"));
                       setComicMode("pure_cinematic");
                       setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
                     }}
@@ -4573,9 +5227,10 @@ const App: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      enterSingleMode();
                       setCreationType("paper");
                       setNarrativeRole(getDefaultNarrativeRole("paper"));
-                      setPublicationFormat("webtoon");
+                      setPublicationFormat(getDefaultPublicationFormat("paper"));
                       setToneMode("normal");
                       setToneLevel("medium");
                       setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
@@ -4586,31 +5241,24 @@ const App: React.FC = () => {
                   </button>
                 </div>
               </div>
+              )}
 
-              {creationType === "educational" && (
-              <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("만화 모드", "Comic Mode")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      setComicMode("learning");
-                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
-                    }}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${comicMode === "learning" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("학습", "Learning")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setComicMode("cinematic");
-                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
-                    }}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${isEduCinematicSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("장면형 학습", "Scene-Led")}
-                  </button>
+              {productionMode === "new_longform" && (
+                <div className="mb-8 p-6 bg-violet-50 border-2 border-black">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-black text-violet-800 uppercase flex items-center gap-2">
+                        <Plus size={16} /> {ui("새 장편 1화", "New Longform Episode 1")}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-600">
+                        {ui("이 화면에서는 1화 원고와 스타일을 정하고, 캐릭터 설정 화면에서 장편 보관함으로 저장해.", "Set episode 1 script and style here, then save the cast as a longform library in character setup.")}
+                      </p>
+                    </div>
+                    <span className="w-fit border-2 border-violet-700 bg-white px-3 py-1 text-[10px] font-black text-violet-800 uppercase">
+                      {ui("스토리/창작", "Story")}
+                    </span>
+                  </div>
                 </div>
-              </div>
               )}
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
@@ -4695,58 +5343,6 @@ const App: React.FC = () => {
 
               {creationType === "educational" && (<>
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("질문 유형", "Question Type")}</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setQuestionType("explain")}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${questionType === "explain" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("설명", "Explain")}
-                  </button>
-                  <button
-                    onClick={() => setQuestionType("compare")}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${questionType === "compare" ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("비교", "Compare")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setQuestionType("review");
-                      setIntroStyle("standard");
-                    }}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${questionType === "review" ? 'bg-yellow-300 text-black' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("리뷰", "Review")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
-                <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("도입 방식", "Intro Style")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setIntroStyle("standard")}
-                    className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${introStyle === "standard" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("기본", "Standard")}
-                  </button>
-                  <button
-                    onClick={() => setIntroStyle("myth_busting")}
-                    disabled={questionType === "review"}
-                    title={questionType === "review" ? ui("리뷰 모드에서는 비활성화돼.", "Disabled in Review mode.") : ui("오해 깨기 오프닝", "Myth-busting opening")}
-                    className={`py-2 border-2 font-black text-[10px] uppercase transition-colors ${questionType === "review"
-                      ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : introStyle === "myth_busting"
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "border-black bg-white hover:bg-slate-100"
-                      }`}
-                  >
-                    {ui("오해 깨기", "Myth Busting")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("독자 수준", "Audience")}</p>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   <button
@@ -4788,19 +5384,19 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("입력 형태", "Input Type")}</p>
                 <div className="grid grid-cols-3 gap-2">
                   <button
-                    onClick={() => setStoryInputType("script")}
+	                    onClick={() => handleStoryInputTypeChange("script")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${storyInputType === "script" ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("대본/시나리오", "Script")}
                   </button>
                   <button
-                    onClick={() => setStoryInputType("prose")}
+	                    onClick={() => handleStoryInputTypeChange("prose")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${storyInputType === "prose" ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("소설/산문", "Prose")}
                   </button>
                   <button
-                    onClick={() => setStoryInputType("scenario")}
+	                    onClick={() => handleStoryInputTypeChange("scenario")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${storyInputType === "scenario" ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("상황/설정", "Scenario")}
@@ -4809,9 +5405,13 @@ const App: React.FC = () => {
               </div>
 
               <div className="mb-8">
-                <p className="text-sm font-bold text-slate-500 mb-4 uppercase">
-                  {storyInputType === "script" ? ui("대본을 입력해줘", "Enter a script") : storyInputType === "prose" ? ui("소설/산문 텍스트를 입력해줘", "Enter prose text") : ui("어떤 상황/설정이야?", "What is the situation or premise?")}
-                </p>
+	                <p className="text-sm font-bold text-slate-500 mb-4 uppercase">
+	                  {storyInputType === "script"
+	                    ? ui(`대본을 입력해줘 · 최소 ${STORY_MIN_INPUT_CHARS}자`, `Enter a script · at least ${STORY_MIN_INPUT_CHARS} chars`)
+	                    : storyInputType === "prose"
+	                      ? ui(`소설/산문 텍스트를 입력해줘 · 최소 ${STORY_MIN_INPUT_CHARS}자`, `Enter prose text · at least ${STORY_MIN_INPUT_CHARS} chars`)
+	                      : ui(`어떤 상황/설정이야? · 최소 ${STORY_MIN_INPUT_CHARS}자`, `What is the situation or premise? · at least ${STORY_MIN_INPUT_CHARS} chars`)}
+	                </p>
                 <textarea
                   value={scriptText}
                   onChange={(e) => setScriptText(e.target.value)}
@@ -4819,11 +5419,13 @@ const App: React.FC = () => {
                     ? ui("예:\n(장면: 어두운 골목길, 비가 내린다)\n\n지수: 여기서 기다리라고 했잖아.\n민호: (뒤돌아보며) 기다릴 시간이 없어.", "Example:\n(Scene: A dark alley in the rain.)\n\nJisoo: I told you to wait here.\nMinho: We don't have time to wait.")
                     : storyInputType === "prose"
                       ? ui("예:\n비가 쏟아지는 골목길에서 지수는 민호의 등을 바라보고 있었다...", "Example:\nIn the rain-soaked alley, Jisoo watched Minho's back...")
-                      : ui("예:\n고등학생 지수가 우연히 시간여행 능력을 얻게 된다.", "Example:\nA high school student accidentally gains the ability to travel through time.")}
+	                      : ui("예:\n고등학생 지수가 낡은 필름 카메라를 주운 뒤, 사진을 찍은 순간으로 10분 전 되돌아갈 수 있게 된다. 처음엔 시험과 친구 문제를 해결하려 하지만, 반복할수록 주변 사람들의 기억이 조금씩 어긋난다.", "Example:\nA high school student finds an old film camera and gains the ability to jump back ten minutes to the moment each photo was taken. At first she uses it to fix exams and friendships, but each reset slowly changes what others remember.")}
                   className="w-full border-4 border-black p-4 md:p-6 text-sm font-mono mb-2 outline-none focus:bg-violet-50 h-48 resize-y"
                 />
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400">{scriptText.length.toLocaleString()}{ui("자", " chars")}</p>
+	                  <p className={`text-[10px] font-bold ${scriptText.trim().length >= STORY_MIN_INPUT_CHARS ? "text-slate-400" : "text-violet-700"}`}>
+	                    {scriptText.trim().length.toLocaleString()}/{STORY_MIN_INPUT_CHARS}{ui("자 최소", " chars min")}
+	                  </p>
                   <label className="flex items-center gap-1 text-[10px] font-black uppercase bg-white border-2 border-black px-2 py-1 hover:bg-yellow-50 cursor-pointer">
                     <Upload size={12} /> {ui("파일 업로드", "Upload File")}
                     <input
@@ -4844,23 +5446,42 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2 mt-3">
                   <button
                     onClick={handleAnalyzeStory}
-                    disabled={isStoryAnalyzing || scriptText.trim().length < 50}
-                    className="bg-violet-600 text-white px-4 py-2 text-xs font-black hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+	                    disabled={isStoryAnalyzing || scriptText.trim().length < STORY_MIN_INPUT_CHARS}
+                    className={`px-4 py-2 text-xs font-black transition-colors flex items-center gap-2 disabled:opacity-50 ${storyAdaptationMode === "analyzed" && storyDigestText ? "bg-violet-700 text-white" : "bg-violet-600 text-white hover:bg-violet-700"}`}
                   >
                     {isStoryAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles size={14} />}
-                    스토리 분석
+	                    AI 각색
+                  </button>
+                  <button
+                    onClick={handleUseStoryAsIs}
+		                    disabled={!canUseStoryDirectly || isStoryAnalyzing || scriptText.trim().length < STORY_MIN_INPUT_CHARS}
+	                    title={storyInputType === "scenario" ? ui("상황/설정은 AI 각색 후 진행할 수 있어.", "Scenario input needs AI adaptation first.") : undefined}
+                    className={`px-4 py-2 text-xs font-black border-2 border-black transition-colors flex items-center gap-2 disabled:opacity-50 ${storyAdaptationMode === "direct" ? "bg-black text-white" : "bg-white text-black hover:bg-slate-100"}`}
+                  >
+                    <CheckCircle2 size={14} />
+                    이대로 사용
                   </button>
                   {storyDigestText && (
                     <button
-                      onClick={() => { setStoryDigestText(""); setStoryDigestWarnings([]); setStoryPageSuggestions(null); setStoryDigestError(null); }}
+                      onClick={() => { setStoryAdaptationMode("analyzed"); setStoryDigestText(""); setStoryDigestWarnings([]); setStoryPageSuggestions(null); setStoryDigestError(null); }}
                       className="text-[10px] font-black text-slate-400 hover:text-red-500 uppercase"
                     >
                       초기화
                     </button>
                   )}
                 </div>
+                {storyAdaptationMode === "direct" && (
+                  <p className="text-[10px] font-bold text-slate-500 mt-2">
+                    {ui("원문을 바로 만화 스크립트로 넘겨. 스토리 브리프/페이지 아웃라인 압축은 건너뛰고, 페이지 수만 원문 길이로 자동 추정해.", "Uses the original text directly, skips story brief/page-outline compression, and only estimates page count from source length.")}
+                  </p>
+                )}
+                {storyInputType === "scenario" && (
+                  <p className="text-[10px] font-bold text-violet-700 mt-2">
+                    {ui("상황/설정은 바로 사용하지 않고, AI 각색 후 다음 단계로 진행해.", "Scenario input must be adapted before continuing.")}
+                  </p>
+                )}
                 {storyDigestError && (
-                  <p className="text-[10px] font-black text-red-600 mt-2">스토리 분석 오류: {storyDigestError}</p>
+                  <p className="text-[10px] font-black text-red-600 mt-2">AI 각색 오류: {storyDigestError}</p>
                 )}
                 {storyDigestWarnings.length > 0 && (
                   <div className="border-2 border-yellow-400 bg-yellow-50 p-3 mt-3">
@@ -4883,6 +5504,214 @@ const App: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {productionMode === "longform" && (
+              <div className="mb-8 p-6 bg-indigo-50 border-2 border-black">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-black text-indigo-800 uppercase flex items-center gap-2">
+                      <BookOpen size={16} /> {ui("장편 프로젝트", "Longform Project")}
+                    </p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-600">
+                      {activeLongformProject
+                        ? ui(`${activeLongformProject.label} · 보관 캐릭터 ${activeLongformProject.snapshot.cast.length}명`, `${activeLongformProject.label} · ${activeLongformProject.snapshot.cast.length} saved characters`)
+                        : ui("캐릭터 보관함과 저장된 그림체를 불러와서 이번 화 출연진만 골라.", "Load a character library and saved style, then pick only this episode's cast.")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => promptSaveLongformProject(!activeLongformProject)}
+                    className="border-2 border-black bg-white px-3 py-2 text-[10px] font-black hover:bg-slate-100 flex items-center justify-center gap-2"
+                  >
+                    <Save size={14} /> {activeLongformProject ? ui("현재 설정 저장", "Save Current Setup") : ui("새 장편 저장", "Save New Longform")}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 mb-4">
+                  <select
+                    value={selectedLongformProjectId}
+                    onChange={(e) => setSelectedLongformProjectId(e.target.value)}
+                    className="w-full border-2 border-black bg-white px-3 py-2 text-xs font-black outline-none focus:bg-indigo-50"
+                  >
+                    <option value="">
+                      {longformProjects.length > 0 ? ui("(장편 프로젝트 선택)", "(Select longform project)") : ui("(저장된 장편 없음)", "(No saved longform projects)")}
+                    </option>
+                    {longformProjects
+                      .slice()
+                      .sort((a, b) => b.updated_at - a.updated_at)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label} · {p.snapshot.cast.length}{ui("명", "")}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => selectedLongformProject && loadLongformProject(selectedLongformProject.id)}
+                    disabled={!selectedLongformProject}
+                    className="bg-black text-white px-4 py-2 text-xs font-black border-2 border-black hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <FolderOpen size={14} /> {ui("불러오기", "Load")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectedLongformProject && deleteLongformProject(selectedLongformProject.id)}
+                    disabled={!selectedLongformProject}
+                    className="border-2 border-black bg-white px-4 py-2 text-xs font-black hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={14} /> {ui("삭제", "Delete")}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void runEpisodeCastSelection()}
+	                  disabled={!activeLongformProject || isSelectingEpisodeCast || scriptText.trim().length < STORY_MIN_INPUT_CHARS}
+                  className="w-full bg-indigo-700 text-white px-4 py-3 text-xs font-black border-2 border-black hover:bg-indigo-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSelectingEpisodeCast ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {isSelectingEpisodeCast ? ui("출연진 찾는 중", "Finding Cast") : ui("이번 화 출연진 자동 선택", "Auto-Select Episode Cast")}
+                </button>
+
+                {longformNotice && (
+                  <div
+                    className={`mt-4 border-2 p-3 text-[10px] font-bold whitespace-pre-wrap ${
+                      longformNotice.kind === "error"
+                        ? "border-red-500 bg-red-50 text-red-900"
+                        : longformNotice.kind === "success"
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+                          : "border-indigo-600 bg-white text-slate-800"
+                    }`}
+                  >
+                    <p className="font-black">{longformNotice.message}</p>
+                    {longformNotice.detail && (
+                      <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed">{longformNotice.detail}</pre>
+                    )}
+                  </div>
+                )}
+
+                {episodeCastReview && activeLongformProject && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="border-2 border-black bg-white p-3">
+                        <p className="text-[10px] font-black uppercase text-slate-500">{ui("기존 인물", "Existing")}</p>
+                        <p className="text-xl font-black">{episodeCastReview.matched_existing_characters.length}</p>
+                      </div>
+                      <div className="border-2 border-black bg-white p-3">
+                        <p className="text-[10px] font-black uppercase text-slate-500">{ui("확인 필요", "Possible")}</p>
+                        <p className="text-xl font-black">{episodeCastReview.possible_matches.length}</p>
+                      </div>
+                      <div className="border-2 border-black bg-white p-3">
+                        <p className="text-[10px] font-black uppercase text-slate-500">{ui("신규", "New")}</p>
+                        <p className="text-xl font-black">{episodeCastReview.new_character_candidates.length}</p>
+                      </div>
+                    </div>
+
+                    {episodeCastReview.matched_existing_characters.length > 0 && (
+                      <div className="border-2 border-black bg-white p-3">
+                        <p className="text-[10px] font-black uppercase text-emerald-700 mb-2">{ui("이번 화에 쓰일 기존 캐릭터", "Existing characters for this episode")}</p>
+                        <div className="space-y-2">
+                          {episodeCastReview.matched_existing_characters.slice(0, 8).map((match, idx) => {
+                            const character = activeLongformCharactersById.get(match.character_id);
+                            return (
+                              <div key={`${match.character_id}-${idx}`} className="border border-slate-200 p-2 text-[10px] font-bold">
+                                <p className="font-black">{character?.name || match.mentioned_as || match.character_id}</p>
+                                <p className="text-slate-500">{match.evidence || ui("근거 없음", "No evidence")}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {episodeCastReview.possible_matches.length > 0 && (
+                      <div className="border-2 border-yellow-500 bg-yellow-50 p-3">
+                        <p className="text-[10px] font-black uppercase text-yellow-800 mb-2">{ui("애매한 매칭", "Possible Matches")}</p>
+                        <div className="space-y-2">
+                          {episodeCastReview.possible_matches.slice(0, 5).map((match, idx) => (
+                            <div key={`${match.mentioned_as}-${idx}`} className="border border-yellow-300 bg-white p-2 text-[10px] font-bold">
+                              <p className="font-black">{match.mentioned_as || ui("이름 없는 인물", "Unnamed character")}</p>
+                              <p className="text-slate-500">{match.reason || match.evidence}</p>
+                              <select
+                                value={episodePossibleMatchSelections[idx] || match.candidate_character_ids[0] || "__skip__"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setEpisodePossibleMatchSelections((prev) => ({ ...prev, [idx]: value }));
+                                }}
+                                className="mt-2 w-full border-2 border-black bg-white px-2 py-2 text-[10px] font-black outline-none focus:bg-yellow-50"
+                              >
+                                <option value="__skip__">{ui("이번 화에서 제외", "Exclude from episode")}</option>
+                                {match.candidate_character_ids.map((id) => {
+                                  const character = activeLongformCharactersById.get(id);
+                                  return (
+                                    <option key={id} value={id}>
+                                      {character?.name || id}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {episodeCastReview.new_character_candidates.length > 0 && (
+                      <div className="border-2 border-blue-500 bg-blue-50 p-3">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-2">
+                          <p className="text-[10px] font-black uppercase text-blue-800">{ui("새로 만들 인물", "New Characters Needed")}</p>
+                          <button
+                            type="button"
+                            onClick={addSelectedEpisodeNewCharactersToLibrary}
+                            className="border-2 border-black bg-white px-3 py-2 text-[10px] font-black hover:bg-blue-100 flex items-center justify-center gap-2"
+                          >
+                            <Plus size={13} /> {ui("선택 신규 보관함 추가", "Add Selected to Library")}
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {episodeCastReview.new_character_candidates.slice(0, 6).map((candidate, idx) => (
+                            <label key={`${candidate.name}-${idx}`} className="block border border-blue-200 bg-white p-2 text-[10px] font-bold cursor-pointer hover:bg-blue-50">
+                              <div className="flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={episodeNewCharacterSelections[idx] !== false}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setEpisodeNewCharacterSelections((prev) => ({ ...prev, [idx]: checked }));
+                                  }}
+                                  className="mt-0.5"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-black">{candidate.name || ui("새 인물", "New character")}</p>
+                                  <p className="text-slate-600">{candidate.appearance || candidate.visual_prompt}</p>
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyEpisodeCastReview(true)}
+                        className="bg-black text-white px-4 py-3 text-xs font-black border-2 border-black hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 size={14} /> {ui("신규 포함해서 적용", "Apply With New")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyEpisodeCastReview(false)}
+                        className="border-2 border-black bg-white px-4 py-3 text-xs font-black hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <UserCheck size={14} /> {ui("기존 인물만 적용", "Existing Only")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("연령 등급", "Age Rating")}</p>
@@ -5039,7 +5868,7 @@ const App: React.FC = () => {
                     {isPaperAnalyzing && (
                       <div className="border-2 border-black bg-white p-4 flex items-center gap-3">
 	                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-	                        <p className="text-[10px] font-black uppercase">{ui("논문 브리프 추출 중...", "Extracting paper brief...")}</p>
+	                        <p className="text-[10px] font-black uppercase">{ui("논문 해설 원고 생성 중...", "Generating paper story...")}</p>
 	                      </div>
 	                    )}
 
@@ -5051,78 +5880,45 @@ const App: React.FC = () => {
                       <div className="border-2 border-black bg-white p-4 space-y-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="bg-emerald-600 text-white px-2 py-0.5 text-[10px] font-black uppercase">
-                            {ui("브리프 검토", "Brief Review")}
-                          </span>
-                          <span className="border-2 border-black px-2 py-0.5 text-[10px] font-black uppercase">
-                            {paperTrackLabel}
-                          </span>
-                          <span className="border-2 border-black px-2 py-0.5 text-[10px] font-black uppercase bg-slate-50">
-                            {paperBrief.domain_guess || ui("학술 논문", "Academic Paper")}
+                            {ui("원고 검토", "Story Review")}
                           </span>
                         </div>
 
 	                        <div>
-	                          <p className="text-sm md:text-base font-black">{paperBrief.paper_title}</p>
-	                          <p className="text-[11px] font-bold text-slate-600 mt-2">{paperBrief.one_line_takeaway}</p>
+	                          <p className="text-sm md:text-base font-black">{paperBrief.paper_title || ui("논문 해설 원고", "Paper Story")}</p>
 	                        </div>
 
-	                        {(paperBrief.paper_story_units || []).length > 0 && (
-	                          <div className="border-2 border-black bg-emerald-50 p-3 text-[10px] font-bold text-slate-700">
-	                            <p className="font-black uppercase mb-2 text-emerald-700">{ui("논문 전개 흐름", "Paper Story Flow")}</p>
-	                            <div className="space-y-1">
-	                              {(paperBrief.paper_story_units || []).slice(0, 6).map((unit, index) => (
-	                                <p key={index}>- {unit.step}: {unit.reader_question}</p>
-	                              ))}
-	                            </div>
-	                          </div>
-	                        )}
-
-	                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-bold text-slate-700">
-	                          <div className="border-2 border-black bg-emerald-50 p-3">
-	                            <p className="font-black uppercase mb-2 text-emerald-700">{ui("배경과 문제의 틈", "Background & Gap")}</p>
-	                            <p>{paperBrief.motivation_context || "연구 필요성은 본문 근거가 더 필요해 보수적으로 비워뒀습니다."}</p>
-	                          </div>
-                          <div className="border-2 border-black bg-slate-50 p-3">
-                            <p className="font-black uppercase mb-2 text-slate-500">{ui("독자용 도입 예시", "Reader Hook")}</p>
-                            <p>{paperBrief.reader_hook_example || "도입 예시는 논문 맥락에서 안전하게 유도되지 않아 생략됐습니다."}</p>
+                        <div className="border-2 border-black bg-emerald-50 p-3">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <p className="text-[10px] font-black uppercase text-emerald-700">
+                              {ui("해설 원고", "Explainer Story")}
+                            </p>
+                            <span className="text-[10px] font-black text-slate-500">
+                              {ui("이 원고를 나눠서 페이지 수를 추천해", "Page count is based on this story")}
+                            </span>
                           </div>
+                          <textarea
+                            value={paperBrief.explainer_story || ""}
+                            onChange={(e) => setPaperBrief((prev) => prev ? { ...prev, explainer_story: e.target.value } : prev)}
+                            className="w-full min-h-[180px] border-2 border-black bg-white p-3 text-[11px] font-bold leading-relaxed outline-none focus:bg-emerald-50"
+                          />
+                          {paperBrief.page_division_note && (
+                            <p className="mt-2 text-[10px] font-bold text-slate-600">
+                              {paperBrief.page_division_note}
+                            </p>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-bold text-slate-700">
+                        {(paperBrief.source_cues || []).length > 0 && (
                           <div className="border-2 border-black bg-slate-50 p-3">
-                            <p className="font-black uppercase mb-2 text-slate-500">{ui("연구 질문", "Research Question")}</p>
-                            <p>{paperBrief.research_question || paperBrief.core_problem || "핵심 연구 질문이 보수적으로 요약되지 않았습니다."}</p>
-                          </div>
-                          <div className="border-2 border-black bg-slate-50 p-3">
-                            <p className="font-black uppercase mb-2 text-slate-500">{ui("기존 한계", "Prior Limitations")}</p>
-                            <div className="space-y-1">
-                              {paperBrief.prior_limitations.slice(0, 3).map((item, index) => (
-                                <p key={index}>- {item}</p>
-                              ))}
-                              {paperBrief.prior_limitations.length === 0 && <p>{ui("- 기존 접근 한계는 논문 본문 기준으로 더 보수적으로 해석돼.", "- Prior limitations were conservatively interpreted from the paper body.")}</p>}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px] font-bold text-slate-700">
-                          <div className="border-2 border-black bg-slate-50 p-3">
-                            <p className="font-black uppercase mb-2 text-slate-500">{ui("핵심 기여", "Main Contributions")}</p>
-                            <div className="space-y-1">
-                              {paperBrief.main_contributions.slice(0, 3).map((item, index) => (
+                            <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("확인한 출처 단서", "Source Cues")}</p>
+                            <div className="space-y-1 text-[10px] font-bold text-slate-700">
+                              {paperBrief.source_cues.slice(0, 4).map((item, index) => (
                                 <p key={index}>- {item}</p>
                               ))}
                             </div>
                           </div>
-                          <div className="border-2 border-black bg-slate-50 p-3">
-                            <p className="font-black uppercase mb-2 text-slate-500">{ui("한계", "Limitations")}</p>
-                            <div className="space-y-1">
-                              {paperBrief.limitations.slice(0, 3).map((item, index) => (
-                                <p key={index}>- {item}</p>
-                              ))}
-                              {paperBrief.limitations.length === 0 && <p>{ui("- 명시적 한계가 적어 보수적으로 요약돼.", "- Explicit limitations were sparse, so this was summarized conservatively.")}</p>}
-                            </div>
-                          </div>
-                        </div>
+                        )}
 
                         {(paperBrief.warnings || []).length > 0 && (
                           <div className="border-2 border-yellow-400 bg-yellow-50 p-3">
@@ -5203,20 +5999,15 @@ const App: React.FC = () => {
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("말투/제스처", "Tone & Gesture")}</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {DELIVERY_STYLE_PRESETS.map((p) => {
-                    const disabled =
-                      p.id === "sensual_pg13" && (audienceLevel === "kids" || audienceLevel === "teen");
                     return (
                       <button
                         key={p.id}
                         onClick={() => setDeliveryStyleId(p.id)}
-                        disabled={disabled}
-                        title={disabled ? ui("어린이/청소년 독자에는 사용할 수 없어.", "Not available for Kids/Teen audiences.") : p.label}
-                        className={`py-2 border-2 font-black text-[10px] uppercase transition-colors ${disabled
-                          ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
-                          : deliveryStyleId === p.id
-                            ? "border-blue-600 bg-blue-50 text-blue-700"
-                            : "border-black bg-white hover:bg-slate-100"
-                          }`}
+                        title={p.label}
+                        className={`py-2 border-2 font-black text-[10px] uppercase transition-colors ${deliveryStyleId === p.id
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-black bg-white hover:bg-slate-100"
+                        }`}
                       >
                         {p.label}
                       </button>
@@ -5239,7 +6030,7 @@ const App: React.FC = () => {
 
               {creationType === "educational" && (<>
               <p className="text-sm font-bold text-slate-500 mb-4 uppercase">
-                {isPureCinematicSelected ? ui("어떤 이야기를 보여줄까?", "What story should we show?") : ui("무엇을 학습해볼까?", "What should we learn?")}
+                {ui("무엇이 궁금해?", "What are you curious about?")}
               </p>
               <input
                 type="text"
@@ -5346,7 +6137,7 @@ const App: React.FC = () => {
                   )}
 
                   {researchDigestError && (
-                    <p className="text-[10px] font-black text-red-600">{ui("Digest 오류", "Digest Error")}: {researchDigestError}</p>
+                    <p className="text-[10px] font-black text-red-600">{ui("해설 원고 생성 오류", "Story draft error")}: {researchDigestError}</p>
                   )}
 
                   {researchDigestWarnings.length > 0 && (
@@ -5362,7 +6153,7 @@ const App: React.FC = () => {
 
                   {researchDigestText && (
                     <div>
-                      <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("Digest 결과", "Digest Result")}</p>
+                      <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("소설형 해설 원고", "Story-style explainer")}</p>
                       <textarea
                         value={researchDigestText}
                         onChange={(e) => setResearchDigestText(e.target.value)}
@@ -5402,60 +6193,55 @@ const App: React.FC = () => {
 
                   <div>
                     <p className="text-[10px] font-black uppercase text-slate-600 mb-2">
-                      {isPaperSelected ? ui("추천 페이지 수", "Recommended Page Count") : ui("페이지 수", "Page Count")}
+                      {isPaperSelected ? ui("해설 원고 기준 페이지 수", "Page Count From Story") : ui("페이지 수", "Page Count")}
                     </p>
-                    {isPaperSelected ? (
-                      <p className="text-[10px] font-bold text-slate-500">
-                        {ui("추천", "Recommended")}: <span className="font-black">{targetPageCount}P</span>
-                        {!paperBrief ? ui(" (PDF 분석 후 자동 계산)", " (auto after PDF analysis)") : ui(" (논문 브리프 기준 자동 계산)", " (auto from paper brief)")}
-                      </p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          <button
-                            onClick={() => setPageCountMode("auto")}
-                            className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${pageCountMode === "auto" ? "bg-black text-white" : "bg-white hover:bg-slate-100"}`}
-                          >
-                            {ui("자동", "Auto")}
-                          </button>
-                          <button
-                            onClick={() => setPageCountMode("manual")}
-                            className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${pageCountMode === "manual" ? "bg-blue-600 text-white border-blue-600" : "bg-white hover:bg-slate-100"}`}
-                          >
-                            {ui("수동", "Manual")}
-                          </button>
-                        </div>
+                    <>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <button
+                          onClick={() => setPageCountMode("auto")}
+                          className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${pageCountMode === "auto" ? "bg-black text-white" : "bg-white hover:bg-slate-100"}`}
+                        >
+                          {ui("자동", "Auto")}
+                        </button>
+                        <button
+                          onClick={() => setPageCountMode("manual")}
+                          className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${pageCountMode === "manual" ? "bg-blue-600 text-white border-blue-600" : "bg-white hover:bg-slate-100"}`}
+                        >
+                          {ui("수동", "Manual")}
+                        </button>
+                      </div>
 
-                        {pageCountMode === "manual" ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={1}
-                              max={MAX_PAGE_COUNT}
-                              step={1}
-                              value={targetPageCount}
-                              onChange={(e) => {
-                                const next = Number.parseInt(e.target.value || "1", 10);
-                                setTargetPageCount(clampPageCount(Number.isFinite(next) ? next : 1));
-                              }}
-                              className="w-20 px-3 py-2 text-xs font-black border-2 border-black bg-white outline-none focus:bg-yellow-50"
-                              aria-label="Target page count"
-                            />
-                            <span className="text-[10px] font-black uppercase text-slate-500">P</span>
-                          </div>
-                        ) : (
-                          <p className="text-[10px] font-bold text-slate-500">
-                            {creationType === "story" && !storyPageSuggestions ? (
-                              <>{ui("대기", "Waiting")}: <span className="font-black">{ui("스토리 분석 후 자동 결정", "auto after story analysis")}</span></>
-                            ) : creationType === "educational" && !pageSuggestions ? (
-                              <>{ui("대기", "Waiting")}: <span className="font-black">{ui("AI 핵심 정리 후 자동 결정", "auto after AI summary")}</span></>
-                            ) : (
-                              <>{ui("추천", "Recommended")}: <span className="font-black">{targetPageCount}P</span></>
-                            )}
-                          </p>
-                        )}
-                      </>
-                    )}
+                      {pageCountMode === "manual" ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_PAGE_COUNT}
+                            step={1}
+                            value={targetPageCount}
+                            onChange={(e) => {
+                              const next = Number.parseInt(e.target.value || "1", 10);
+                              setTargetPageCount(clampPageCount(Number.isFinite(next) ? next : 1));
+                            }}
+                            className="w-20 px-3 py-2 text-xs font-black border-2 border-black bg-white outline-none focus:bg-yellow-50"
+                            aria-label="Target page count"
+                          />
+                          <span className="text-[10px] font-black uppercase text-slate-500">P</span>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] font-bold text-slate-500">
+                          {creationType === "paper" && !paperBrief ? (
+                            <>{ui("대기", "Waiting")}: <span className="font-black">{ui("해설 원고 생성 후 자동 추천", "auto after explainer story")}</span></>
+                          ) : creationType === "story" && storyAdaptationMode !== "direct" && !storyPageSuggestions ? (
+                            <>{ui("대기", "Waiting")}: <span className="font-black">{ui("AI 각색 후 자동 결정", "auto after AI adaptation")}</span></>
+                          ) : creationType === "educational" && !pageSuggestions ? (
+                            <>{ui("대기", "Waiting")}: <span className="font-black">{ui("AI 해설 원고 후 자동 추천", "auto after AI explainer")}</span></>
+                          ) : (
+                            <>{ui("추천", "Recommended")}: <span className="font-black">{targetPageCount}P</span></>
+                          )}
+                        </p>
+                      )}
+                    </>
                   </div>
                 </div>
               </div>

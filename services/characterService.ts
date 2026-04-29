@@ -14,6 +14,28 @@ export interface ContentCastSuggestion {
   story_function: string;
 }
 
+export interface EpisodeCastExistingMatch {
+  character_id: string;
+  mentioned_as: string;
+  confidence: number;
+  evidence: string;
+  role?: CastRole;
+}
+
+export interface EpisodeCastPossibleMatch {
+  mentioned_as: string;
+  candidate_character_ids: string[];
+  evidence: string;
+  reason: string;
+}
+
+export interface EpisodeCastSelectionResult {
+  matched_existing_characters: EpisodeCastExistingMatch[];
+  possible_matches: EpisodeCastPossibleMatch[];
+  new_character_candidates: ContentCastSuggestion[];
+  not_used_character_ids: string[];
+}
+
 interface SelectedCharacterStyle {
   preset_id?: string;
   preset_label?: string;
@@ -182,6 +204,230 @@ ${sourceText.slice(0, 60000)}
   const supporting = suggestions.filter((c) => c.role === "supporting").slice(0, 4);
   const normalized = protagonists.length > 0 ? [...protagonists, ...supporting] : suggestions.slice(0, 6);
   return normalized;
+};
+
+export const analyzeEpisodeCastFromLibrary = async (params: {
+  episode_text: string;
+  character_library: CharacterSpec[];
+  selected_style?: SelectedCharacterStyle;
+  publication_format?: string;
+  story_genre?: string;
+  story_input_type?: string;
+  age_rating?: string;
+}): Promise<EpisodeCastSelectionResult> => {
+  const episodeText = String(params.episode_text || "").trim();
+  const library = Array.isArray(params.character_library)
+    ? params.character_library.filter((c) => String(c?.name || c?.appearance || c?.persona || "").trim())
+    : [];
+  if (!episodeText || library.length === 0) {
+    return {
+      matched_existing_characters: [],
+      possible_matches: [],
+      new_character_candidates: [],
+      not_used_character_ids: library.map((c) => c.id)
+    };
+  }
+
+  const knownIds = new Set(library.map((c) => c.id));
+  const genreEraLock = buildGenreEraLock(episodeText);
+  const selectedStyle = params.selected_style || {};
+  const librarySummary = library.map((c, index) => [
+    `ID: ${c.id}`,
+    `번호: ${index + 1}`,
+    `역할: ${c.role}`,
+    `이름/호칭: ${c.name || "(이름 없음)"}`,
+    `외형: ${c.appearance || c.analyzed_appearance || "(외형 없음)"}`,
+    `성격/관계/말투: ${c.persona || "(설정 없음)"}`,
+    `말버릇: ${c.catchphrase || "(없음)"}`
+  ].join("\n")).join("\n\n");
+  const styleSummary = [
+    `프리셋: ${selectedStyle.preset_label || "unspecified"} (${selectedStyle.preset_id || "unknown"})`,
+    `렌더 모드: ${selectedStyle.render_mode || "unspecified"}`,
+    `그림체 지시: ${selectedStyle.style_prompt || "unspecified"}`,
+    selectedStyle.user_style_prompt ? `사용자 추가 지시: ${selectedStyle.user_style_prompt}` : ""
+  ].filter(Boolean).join("\n");
+
+  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
+    request: {
+      model: "gpt-5.5",
+      contents: {
+        parts: [{
+          text: `장편 만화의 이번 화 원고를 읽고, 캐릭터 보관함에서 이번 화에 실제로 등장하는 인물만 골라줘.
+
+출력 포맷: ${params.publication_format || "unspecified"}
+스토리 장르: ${params.story_genre || "unspecified"}
+입력 타입: ${params.story_input_type || "unspecified"}
+연령 등급: ${params.age_rating || "unspecified"}
+장르/시대 락: ${genreEraLock}
+
+선택된 그림체:
+${styleSummary}
+
+캐릭터 보관함:
+${librarySummary}
+
+이번 화 원고:
+${episodeText.slice(0, 60000)}
+`
+        }]
+      },
+      config: {
+        systemInstruction: `당신은 장편 만화 제작용 캐스팅 어시스턴트입니다.
+- 목표는 전체 캐릭터 보관함에서 이번 화에 실제 등장하거나 강하게 암시된 인물만 선택하는 것입니다.
+- 이름이 정확히 일치하지 않아도 별칭, 직함, 관계, 말투, 외형, 행동 단서로 같은 인물임이 분명하면 matched_existing_characters에 넣으세요.
+- 확실하지 않으면 possible_matches에 넣고, candidate_character_ids는 가능성 높은 기존 캐릭터 ID만 넣으세요.
+- 보관함에 없는 새 인물이 원고에 실제로 등장하면 new_character_candidates에 넣으세요.
+- 원고 밖의 설명자, 독자 대리인, 편의상 필요한 보조 캐릭터를 새로 만들지 마세요.
+- not_used_character_ids에는 이번 화에서 쓰지 않는 보관함 캐릭터 ID를 넣으세요.
+- 새 인물의 appearance/persona/visual_prompt는 장르/시대와 선택된 그림체를 유지해서 작성하세요.
+- role은 protagonist 또는 supporting만 사용하세요.
+- 출력은 JSON만 반환하세요.`,
+        responseJsonSchema: {
+          type: "object",
+          properties: {
+            matched_existing_characters: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  character_id: { type: "string" },
+                  mentioned_as: { type: "string" },
+                  confidence: { type: "number" },
+                  evidence: { type: "string" },
+                  role: { type: "string", enum: ["protagonist", "supporting"] }
+                },
+                required: ["character_id", "mentioned_as", "confidence", "evidence"],
+                additionalProperties: false
+              }
+            },
+            possible_matches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  mentioned_as: { type: "string" },
+                  candidate_character_ids: {
+                    type: "array",
+                    items: { type: "string" }
+                  },
+                  evidence: { type: "string" },
+                  reason: { type: "string" }
+                },
+                required: ["mentioned_as", "candidate_character_ids", "evidence", "reason"],
+                additionalProperties: false
+              }
+            },
+            new_character_candidates: {
+              type: "array",
+              maxItems: 8,
+              items: {
+                type: "object",
+                properties: {
+                  role: { type: "string", enum: ["protagonist", "supporting"] },
+                  name: { type: "string" },
+                  appearance: { type: "string" },
+                  persona: { type: "string" },
+                  catchphrase: { type: "string" },
+                  visual_prompt: { type: "string" },
+                  story_function: { type: "string" }
+                },
+                required: ["role", "name", "appearance", "persona", "visual_prompt", "story_function"],
+                additionalProperties: false
+              }
+            },
+            not_used_character_ids: {
+              type: "array",
+              items: { type: "string" }
+            }
+          },
+          required: ["matched_existing_characters", "possible_matches", "new_character_candidates", "not_used_character_ids"],
+          additionalProperties: false
+        }
+      }
+    }
+  });
+
+  const rawResponseText = String(response.text || "").trim();
+  if (!rawResponseText) {
+    throw new Error("Codex가 빈 응답을 반환했어. 이번 화 출연진 분석을 다시 시도해줘.");
+  }
+
+  let json: any;
+  try {
+    json = JSON.parse(rawResponseText.match(/\{[\s\S]*\}/)?.[0] || rawResponseText);
+  } catch {
+    throw new Error(`이번 화 출연진 분석 응답을 JSON으로 읽지 못했어. 응답 일부: ${rawResponseText.slice(0, 500)}`);
+  }
+
+  const matched = (Array.isArray(json.matched_existing_characters) ? json.matched_existing_characters : [])
+    .map((raw: any): EpisodeCastExistingMatch | null => {
+      const characterId = String(raw?.character_id || "").trim();
+      if (!knownIds.has(characterId)) return null;
+      const role = raw?.role === "protagonist" || raw?.role === "supporting" ? raw.role : undefined;
+      const confidence = Number(raw?.confidence);
+      return {
+        character_id: characterId,
+        mentioned_as: String(raw?.mentioned_as || "").trim(),
+        confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.8,
+        evidence: String(raw?.evidence || "").trim(),
+        role
+      };
+    })
+    .filter((item: EpisodeCastExistingMatch | null): item is EpisodeCastExistingMatch => Boolean(item));
+
+  const possible = (Array.isArray(json.possible_matches) ? json.possible_matches : [])
+    .map((raw: any): EpisodeCastPossibleMatch | null => {
+      const candidateIds = Array.isArray(raw?.candidate_character_ids)
+        ? raw.candidate_character_ids.map((id: unknown) => String(id || "").trim()).filter((id: string) => knownIds.has(id))
+        : [];
+      if (candidateIds.length === 0) return null;
+      return {
+        mentioned_as: String(raw?.mentioned_as || "").trim(),
+        candidate_character_ids: candidateIds,
+        evidence: String(raw?.evidence || "").trim(),
+        reason: String(raw?.reason || "").trim()
+      };
+    })
+    .filter((item: EpisodeCastPossibleMatch | null): item is EpisodeCastPossibleMatch => Boolean(item));
+
+  const newCandidates = (Array.isArray(json.new_character_candidates) ? json.new_character_candidates : [])
+    .map((raw: any): ContentCastSuggestion | null => {
+      const role: CastRole = raw?.role === "protagonist" ? "protagonist" : "supporting";
+      const name = String(raw?.name || "").trim();
+      const appearance = String(raw?.appearance || raw?.visual_prompt || "").trim();
+      const persona = String(raw?.persona || raw?.story_function || "").trim();
+      const visualPrompt = String(raw?.visual_prompt || appearance).trim();
+      const storyFunction = String(raw?.story_function || persona).trim();
+      if (!name && !appearance && !persona) return null;
+      return {
+        role,
+        name: name || (role === "protagonist" ? "새 주인공" : "새 조연"),
+        appearance,
+        persona,
+        catchphrase: String(raw?.catchphrase || "").trim(),
+        visual_prompt: visualPrompt,
+        story_function: storyFunction
+      };
+    })
+    .filter((item: ContentCastSuggestion | null): item is ContentCastSuggestion => Boolean(item));
+
+  const usedIds = new Set([
+    ...matched.map((item) => item.character_id),
+    ...possible.flatMap((item) => item.candidate_character_ids)
+  ]);
+  const rawNotUsed = Array.isArray(json.not_used_character_ids)
+    ? json.not_used_character_ids.map((id: unknown) => String(id || "").trim()).filter((id: string) => knownIds.has(id))
+    : [];
+  const notUsed = rawNotUsed.length > 0
+    ? rawNotUsed.filter((id: string) => !usedIds.has(id))
+    : library.map((c) => c.id).filter((id) => !usedIds.has(id));
+
+  return {
+    matched_existing_characters: matched,
+    possible_matches: possible,
+    new_character_candidates: newCandidates,
+    not_used_character_ids: notUsed
+  };
 };
 
 export const generateCharacterCandidates = async (

@@ -27,6 +27,7 @@ export type CharacterConsistencyMode = "loose" | "strict";
 
 export type CreationType = "educational" | "story" | "paper";
 export type StoryInputType = "script" | "prose" | "scenario";
+export type StoryAdaptationMode = "analyzed" | "direct";
 export type AgeRating = "all_ages" | "teen" | "mature";
 export type StoryGenre = "action" | "romance" | "horror" | "comedy" | "drama" | "fantasy" | "sci_fi" | "slice_of_life" | "mystery";
 export type PacingPreference = "fast" | "balanced" | "slow";
@@ -39,11 +40,7 @@ export type DeliveryStyleId =
   | "elder"
   | "half_honorific"
   | "military"
-  | "marine_literature"
-  | "strict_teacher"
   | "kindergarten_teacher"
-  | "sensual_pg13"
-  | "korean_american"
   | "custom";
 
 export interface DeliveryStyleSpec {
@@ -92,6 +89,7 @@ export interface PlannerDebugChunk {
 
 export interface PlannerDebugInfo {
   model: string;
+  provider?: "codex" | "gemini";
   max_output_tokens: number;
   reasoning_effort?: GeminiReasoningEffort;
   created_at: number;
@@ -151,11 +149,10 @@ export interface PaperBrief {
   domain_guess: string;
   paper_mode_track: PaperModeTrack;
   one_line_takeaway: string;
+  explainer_story: string;
+  page_division_note: string;
   motivation_context: string;
   reader_hook_example: string;
-  opening_candidates: string[];
-  paper_story_units: PaperStoryUnit[];
-  page_budget_note: string;
   core_problem: string;
   research_question: string;
   prior_limitations: string[];
@@ -429,6 +426,7 @@ export interface SeriesSpec {
     character_consistency_mode?: CharacterConsistencyMode;
     creation_type?: CreationType;
     story_input_type?: StoryInputType;
+    story_adaptation_mode?: StoryAdaptationMode;
     story_genre?: StoryGenre;
     pacing?: PacingPreference;
     story_anti_education_guard?: boolean;

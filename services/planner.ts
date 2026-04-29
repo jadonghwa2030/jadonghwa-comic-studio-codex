@@ -1,6 +1,6 @@
 
 import { Type } from "./schemaTypes";
-import { SeriesSpec, PageSpec, Language, AudienceLevel, NarrativeRole, LayoutVariety, LayoutTemplate, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ScriptDetail, DeliveryStyleSpec, ComicMode, ToneMode, ToneLevel, IntroStyle, CharacterSpec, CharacterConsistencyMode, PlannerDebugChunk, PlannerDebugInfo, SeriesPlan, OutputMode, I2VAspectRatio, PlanOutline, PageOutlineEntry, PublicationFormat, MangaColorMode, StoryInputType, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, LearningLayoutDensity, LearningLayoutFlow, LearningLayoutIntent, LearningLayoutRole, WEBTOON_CORE_PATTERNS, WEBTOON_GAP_PROFILES, WEBTOON_LAYOUT_MODIFIERS, WEBTOON_SCROLL_BEAT_KINDS, WEBTOON_SCROLL_CHOREOGRAPHY_PATTERNS, WEBTOON_SCROLL_DISTANCES, WEBTOON_SCROLL_FRAMINGS, WEBTOON_SCROLL_SHAPE_STYLES, WEBTOON_SCROLL_VERTICAL_ROLES, WEBTOON_SCROLL_WIDTH_PROFILES, WEBTOON_SCROLL_X_POSITIONS, WebtoonCorePattern, WebtoonDynamicLayout, WebtoonScrollBeatKind, WebtoonScrollChoreography, WebtoonScrollChoreographyPattern, WebtoonScrollDistance, WebtoonScrollFraming, WebtoonScrollSegmentRole, WebtoonScrollShapeStyle, WebtoonScrollVerticalRole, WebtoonScrollWidthProfile, WebtoonScrollXPosition } from "../types";
+import { SeriesSpec, PageSpec, Language, AudienceLevel, NarrativeRole, LayoutVariety, LayoutTemplate, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ScriptDetail, DeliveryStyleSpec, ComicMode, ToneMode, ToneLevel, IntroStyle, CharacterSpec, CharacterConsistencyMode, PlannerDebugChunk, PlannerDebugInfo, SeriesPlan, OutputMode, I2VAspectRatio, PlanOutline, PageOutlineEntry, PublicationFormat, MangaColorMode, StoryInputType, StoryAdaptationMode, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, LearningLayoutDensity, LearningLayoutFlow, LearningLayoutIntent, LearningLayoutRole, WEBTOON_CORE_PATTERNS, WEBTOON_GAP_PROFILES, WEBTOON_LAYOUT_MODIFIERS, WEBTOON_SCROLL_BEAT_KINDS, WEBTOON_SCROLL_CHOREOGRAPHY_PATTERNS, WEBTOON_SCROLL_DISTANCES, WEBTOON_SCROLL_FRAMINGS, WEBTOON_SCROLL_SHAPE_STYLES, WEBTOON_SCROLL_VERTICAL_ROLES, WEBTOON_SCROLL_WIDTH_PROFILES, WEBTOON_SCROLL_X_POSITIONS, WebtoonCorePattern, WebtoonDynamicLayout, WebtoonScrollBeatKind, WebtoonScrollChoreography, WebtoonScrollChoreographyPattern, WebtoonScrollDistance, WebtoonScrollFraming, WebtoonScrollSegmentRole, WebtoonScrollShapeStyle, WebtoonScrollVerticalRole, WebtoonScrollWidthProfile, WebtoonScrollXPosition } from "../types";
 import { postJson } from "./localApi";
 import { parseDynamicLayout, buildDynamicWebtoonTemplate } from "./webtoonLayoutBuilder";
 import { DEFAULT_WEBTOON_PATTERN_CANDIDATES, chooseBestPattern, inferFocusPanelIndexForPattern, inferGapProfileForPattern } from "./webtoonPatternScoring";
@@ -842,9 +842,7 @@ const looksLikeActionTopic = (topic: string): boolean => {
 };
 
 const getGeminiMaxOutputTokens = (): number => {
-  const raw =
-    ((import.meta as any).env?.VITE_CODEX_MAX_OUTPUT_TOKENS as unknown) ||
-    ((import.meta as any).env?.VITE_GEMINI_MAX_OUTPUT_TOKENS as unknown);
+  const raw = (import.meta as any).env?.VITE_CODEX_MAX_OUTPUT_TOKENS as unknown;
   if (typeof raw === "string" && raw.trim()) {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
@@ -855,9 +853,7 @@ const getGeminiMaxOutputTokens = (): number => {
 const DEFAULT_MAX_PAGES_PER_REQUEST = 10;
 
 const getGeminiMaxPagesPerRequest = (): number => {
-  const raw =
-    ((import.meta as any).env?.VITE_CODEX_MAX_PAGES_PER_REQUEST as unknown) ||
-    ((import.meta as any).env?.VITE_GEMINI_MAX_PAGES_PER_REQUEST as unknown);
+  const raw = (import.meta as any).env?.VITE_CODEX_MAX_PAGES_PER_REQUEST as unknown;
   if (typeof raw === "string" && raw.trim()) {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed >= 1) return Math.floor(parsed);
@@ -870,15 +866,11 @@ export const GEMINI_PLANNER_MODEL = "gpt-5.5";
 const getGeminiPlannerModel = (): string => {
   const codexPreferred = (import.meta as any).env?.VITE_CODEX_PLANNER_MODEL as unknown;
   if (typeof codexPreferred === "string" && codexPreferred.trim()) return codexPreferred.trim();
-  const preferred = (import.meta as any).env?.VITE_GEMINI_PLANNER_MODEL as unknown;
-  if (typeof preferred === "string" && preferred.trim()) return preferred.trim();
   return GEMINI_PLANNER_MODEL;
 };
 
 const getGeminiPlannerMaxOutputTokens = (fallback: number): number => {
-  const preferred =
-    ((import.meta as any).env?.VITE_CODEX_PLANNER_MAX_OUTPUT_TOKENS as unknown) ||
-    ((import.meta as any).env?.VITE_GEMINI_PLANNER_MAX_OUTPUT_TOKENS as unknown);
+  const preferred = (import.meta as any).env?.VITE_CODEX_PLANNER_MAX_OUTPUT_TOKENS as unknown;
   if (typeof preferred === "string" && preferred.trim()) {
     const parsed = Number(preferred);
     if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
@@ -1033,410 +1025,9 @@ const safeParseJson = (text: string) => {
   }
 };
 
-const buildPaperResearchPackNotes = (brief: PaperBrief): string => {
-  const explicitUnits = Array.isArray(brief.paper_story_units)
-    ? brief.paper_story_units.filter((unit) =>
-      unit && (unit.step || unit.reader_question || unit.opening_scene || unit.page_reveal)
-    )
-    : [];
-  const paperDomain = String(brief.domain_guess || "").trim() || "이 연구 분야";
-  const firstPagePlainScene =
-    paperDomain.includes("AI") || /인공지능|머신러닝|모델|language|vision|LLM/i.test(`${paperDomain} ${brief.paper_title}`)
-      ? "공개된 웹 문서, 이미지, 코드, 대화 예시가 큰 자료 흐름처럼 모이고, 범용 AI 모델이 그 자료에서 일반적인 패턴을 배우는 장면"
-      : `${paperDomain}에서 실제 사람들이 쓰는 공개 자료, 기록, 화면, 도구가 차분히 쌓여 있는 장면`;
-  const firstPagePlainSpeech =
-    paperDomain.includes("AI") || /인공지능|머신러닝|모델|language|vision|LLM/i.test(`${paperDomain} ${brief.paper_title}`)
-      ? "인터넷에는 공개된 글과 이미지, 코드 같은 자료가 정말 많이 있어. 범용 AI 모델은 이런 자료를 많이 보면서, 사람들이 말하고 그리고 설명하는 패턴을 배워 왔어. 여기서는 일단 그 배경부터 보면 돼."
-      : `${paperDomain}에는 사람들이 남긴 공개 자료와 기록이 있어. 연구는 보통 이런 자료가 어떻게 쌓이고 쓰이는지 살펴보는 데서 출발해. 여기서는 먼저 그 배경부터 천천히 보면 돼.`;
-  const fallbackUnits = [
-    {
-      step: "원래 세상은 이렇다",
-      reader_question: "이 분야에서는 원래 어떤 상황이 벌어지고 있었나?",
-      opening_scene: firstPagePlainScene,
-      page_reveal: "논문이 다루는 세계와 맥락이 먼저 보인다.",
-      page_speech_flow: firstPagePlainSpeech,
-      dont_explain_yet: "논문의 결론, 수치 결과, 핵심 기여를 아직 말하지 않는다.",
-      allowed_content: [
-        `${paperDomain}의 실제 배경 세계`,
-        "논문에 직접 연결되는 공개 자료, 기록, 도구, 화면",
-        "아직 문제가 터지기 전의 평범한 흐름",
-        "범용 모델이나 일반 시스템이 많은 공개 자료에서 패턴을 배울 수 있다는 정도"
-      ],
-      forbidden_content: [
-        "논문에 없는 임의의 고양이 이야기, 상자, 서랍, 창고, 버튼, 게임, 동화 같은 가짜 예시",
-        "비유만 있고 실제 연구 배경이 무엇인지 알 수 없는 장면",
-        "전문 영역의 구체적 데이터 부족 문제",
-        "이 논문의 연구 질문, 방법, 결과, 기여, 한계",
-        "왜 중요한지 직접 선언하는 문장"
-      ],
-      next_page_tease: "그런데 이 평범한 흐름 안에서 이상한 틈이 보이기 시작한다.",
-      source_cue: brief.source_cues[0] || ""
-    },
-    {
-      step: "그런데 이상한 틈이 보인다",
-      reader_question: "겉으로는 괜찮아 보여도 어디서 불편함이나 빈틈이 생기나?",
-      opening_scene: brief.core_problem || "반복되는 실패나 해결되지 않는 불편함이 드러나는 장면",
-      page_reveal: "이 주제에는 그냥 넘어가기 어려운 틈이 있다.",
-      page_speech_flow: "처음에는 자료도 있고 도구도 있어 보여. 그런데 가까이 들여다보면, 모든 상황이 그렇게 매끈하게 흘러가지는 않아. 여기서 작은 틈이 보이기 시작해.",
-      dont_explain_yet: "새 방법과 결과를 아직 공개하지 않는다.",
-      allowed_content: [
-        "배경 세계에서 실제로 생기는 불편함이나 실패",
-        "겉보기에는 자료/도구가 충분해 보여도 해결되지 않는 틈",
-        "문제가 있다는 느낌"
-      ],
-      forbidden_content: [
-        "이 문제가 왜 중요한지에 대한 본격 논증",
-        "기존 연구 한계의 세부 목록",
-        "새 방법, 실험, 결과"
-      ],
-      next_page_tease: "이 틈이 왜 연구 문제로 커지는지 따라간다.",
-      source_cue: brief.source_cues[1] || ""
-    },
-    {
-      step: "그래서 이 문제가 중요해진다",
-      reader_question: "이 빈틈은 왜 사소한 문제가 아니라 연구 문제가 되나?",
-      opening_scene: brief.motivation_context || brief.core_problem || "문제가 커지는 배경을 보여주는 장면",
-      page_reveal: "문제의 중요성이 독자에게 납득된다.",
-      page_speech_flow: "이 틈이 한두 번 불편한 정도라면 그냥 넘어갈 수도 있어. 그런데 같은 문제가 반복되면 이야기가 달라져. 연구가 필요한 이유가 여기서 생겨.",
-      dont_explain_yet: "연구 질문과 방법을 너무 빨리 말하지 않는다.",
-      allowed_content: [
-        "앞 페이지의 틈이 커졌을 때 생기는 영향",
-        "그냥 불편함이 아니라 연구로 다룰 만한 이유",
-        "독자가 납득할 수 있는 필요성"
-      ],
-      forbidden_content: [
-        "논문의 정확한 연구 질문",
-        "방법 구조",
-        "결과와 기여"
-      ],
-      next_page_tease: "이미 있던 방식들은 이 문제를 어디까지 다뤘을까?",
-      source_cue: ""
-    },
-    {
-      step: "기존 방식은 여기서 막힌다",
-      reader_question: "이전 접근은 어디까지 해냈고, 어디서 부족했나?",
-      opening_scene: brief.prior_limitations[0] || "기존 방법이 한계에 부딪히는 비교 장면",
-      page_reveal: "기존 방식의 한계가 보인다.",
-      page_speech_flow: "이미 해보던 방식들이 없었던 건 아니야. 다만 그 방식들이 잘 닿는 곳과, 끝내 닿지 못하는 곳이 갈려. 이 논문은 바로 그 경계에서 출발해.",
-      dont_explain_yet: "논문의 핵심 기여와 결과를 아직 말하지 않는다.",
-      allowed_content: [
-        "기존 접근이 해낸 부분",
-        "기존 접근이 막히는 지점",
-        "왜 새 질문이 필요해지는지"
-      ],
-      forbidden_content: [
-        "논문의 새 방법을 해결책처럼 공개하기",
-        "실험 결과",
-        "최종 기여와 한계"
-      ],
-      next_page_tease: "그래서 논문은 질문을 조금 다르게 잡는다.",
-      source_cue: ""
-    },
-    {
-      step: "이 논문은 질문을 이렇게 바꾼다",
-      reader_question: "이 논문은 문제를 어떤 질문으로 다시 잡았나?",
-      opening_scene: brief.research_question || "연구자가 질문을 다시 정리하는 장면",
-      page_reveal: "논문의 연구 질문이 드러난다.",
-      page_speech_flow: "그래서 논문은 질문을 조금 다르게 잡아. 그냥 더 많이 하자는 쪽이 아니라, 무엇을 어떻게 확인해야 이 틈을 좁힐 수 있는지 묻는 거야.",
-      dont_explain_yet: "검증 결과와 한계를 아직 말하지 않는다.",
-      allowed_content: [
-        "논문이 잡은 핵심 질문",
-        "앞선 한계와 질문이 연결되는 방식",
-        "무엇을 확인하려는지"
-      ],
-      forbidden_content: [
-        "방법의 세부 절차",
-        "결과 수치",
-        "논문 전체 결론"
-      ],
-      next_page_tease: "이 질문에 답하기 위해 어떤 아이디어를 꺼내는지 본다.",
-      source_cue: ""
-    },
-    {
-      step: "핵심 아이디어/방법이 나온다",
-      reader_question: "이 논문은 어떤 아이디어나 방법으로 접근했나?",
-      opening_scene: brief.method_summary || brief.main_contributions[0] || "핵심 방법을 간단한 구조로 보여주는 장면",
-      page_reveal: "새 접근의 형태가 보인다.",
-      page_speech_flow: "여기서 논문의 핵심 아이디어가 나와. 복잡한 세부를 한꺼번에 외우기보다, 이 방법이 앞의 질문에 어떻게 답하려는지 먼저 보면 돼.",
-      dont_explain_yet: "결과가 좋았는지 나빴는지 먼저 단정하지 않는다.",
-      allowed_content: [
-        "핵심 아이디어나 방법의 큰 구조",
-        "방법이 앞선 질문에 어떻게 연결되는지",
-        "독자가 따라갈 수 있는 비유/도식"
-      ],
-      forbidden_content: [
-        "검증 결과의 성공/실패 판단",
-        "결과의 의미 해석",
-        "한계와 최종 요약"
-      ],
-      next_page_tease: "이 아이디어가 실제로 통하는지는 검증 장면에서 확인한다.",
-      source_cue: ""
-    },
-    {
-      step: "검증 장면으로 들어간다",
-      reader_question: "이 아이디어를 어떻게 확인했나?",
-      opening_scene: "데이터, 실험, 비교표, 평가 장면을 만화적으로 단순화한 장면",
-      page_reveal: "논문이 주장을 어떻게 확인하려 했는지 보인다.",
-      page_speech_flow: "아이디어만으로는 충분하지 않아. 논문은 이걸 실제 자료나 실험으로 확인하려고 해. 이제 무엇과 무엇을 비교했는지 보는 차례야.",
-      dont_explain_yet: "최종 의미와 한계를 아직 정리하지 않는다.",
-      allowed_content: [
-        "검증에 사용한 데이터/실험/비교의 큰 그림",
-        "무엇과 무엇을 비교했는지",
-        "결과를 읽기 전의 확인 방식"
-      ],
-      forbidden_content: [
-        "결과가 의미하는 바를 먼저 해석하기",
-        "최종 결론",
-        "한계 정리"
-      ],
-      next_page_tease: "이제 결과가 무엇을 가리키는지 읽는다.",
-      source_cue: brief.source_cues[2] || ""
-    },
-    {
-      step: "결과가 의미하는 바를 읽는다",
-      reader_question: "결과는 숫자 너머로 무엇을 보여주나?",
-      opening_scene: brief.result_summary || "결과 그래프나 비교 장면을 독자가 읽는 장면",
-      page_reveal: "결과가 말하는 핵심 의미가 보인다.",
-      page_speech_flow: "결과는 숫자만 보는 게 아니야. 앞에서 물었던 질문에 어떤 쪽으로 답이 기우는지 읽어야 해. 여기서는 그 방향만 차분히 잡으면 돼.",
-      dont_explain_yet: "논문의 전체 의미를 과장해서 결론내리지 않는다.",
-      allowed_content: [
-        "결과의 핵심 패턴",
-        "그 패턴이 연구 질문에 주는 답",
-        "결과를 과장하지 않은 의미"
-      ],
-      forbidden_content: [
-        "모든 상황에 일반화된 결론",
-        "한계를 지운 단정",
-        "마지막 요약 카드"
-      ],
-      next_page_tease: "하지만 결과를 읽을 때 조심해야 할 경계도 남아 있다.",
-      source_cue: ""
-    },
-    {
-      step: "한계와 남은 질문을 인정한다",
-      reader_question: "이 결과를 어디까지 믿고, 어디서는 조심해야 하나?",
-      opening_scene: brief.limitations[0] || "한계와 남은 질문을 차분히 짚는 장면",
-      page_reveal: "논문을 조심해서 읽어야 할 경계가 생긴다.",
-      page_speech_flow: "그래도 여기서 끝난 이야기는 아니야. 결과가 말해주는 범위가 있고, 아직 조심해야 할 부분도 남아 있어. 좋은 논문일수록 그 경계를 같이 보여줘.",
-      dont_explain_yet: "마지막 의미 정리는 다음 페이지로 남긴다.",
-      allowed_content: [
-        "논문이 인정한 한계",
-        "결과 해석에서 조심할 점",
-        "남은 질문"
-      ],
-      forbidden_content: [
-        "논문 전체를 마지막 한 문장으로 정리하기",
-        "한계를 무시한 홍보성 결론"
-      ],
-      next_page_tease: "그럼에도 이 논문이 남긴 의미를 마지막에 붙잡는다.",
-      source_cue: ""
-    },
-    {
-      step: "마지막으로 의미를 붙잡는다",
-      reader_question: "그래서 이 논문이 우리에게 남긴 한 문장은 무엇인가?",
-      opening_scene: "앞에서 본 배경, 문제, 방법, 결과가 한 장면으로 다시 모이는 마무리",
-      page_reveal: brief.one_line_takeaway || "이 논문이 남긴 의미를 과장 없이 붙잡는다.",
-      page_speech_flow: "처음에 봤던 배경으로 다시 돌아와 보자. 이 논문은 그 안에 있던 틈을 이런 방식으로 바라봤고, 여기까지는 꽤 의미 있는 단서를 남겼어.",
-      dont_explain_yet: "",
-      allowed_content: [
-        "배경에서 시작해 문제, 질문, 방법, 결과, 한계로 이어진 흐름",
-        "논문이 남긴 의미",
-        "조심해서 읽어야 할 한계"
-      ],
-      forbidden_content: [
-        "새로운 사실을 마지막에 처음 공개하기",
-        "근거 없는 과장 결론"
-      ],
-      next_page_tease: "",
-      source_cue: ""
-    }
-  ];
-  const mergeUnique = (...groups: Array<string[] | undefined>): string[] => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const group of groups) {
-      if (!Array.isArray(group)) continue;
-      for (const item of group) {
-        const value = String(item || "").trim();
-        if (!value || seen.has(value)) continue;
-        seen.add(value);
-        out.push(value);
-      }
-    }
-    return out;
-  };
-  const firstPageNeverSay = [
-    "논문에 없는 임의의 고양이 이야기, 상자, 서랍, 창고, 버튼, 게임, 동화 같은 가짜 예시",
-    "비유만 있고 실제 연구 배경이 무엇인지 알 수 없는 장면",
-    "전문 영역 자료가 부족하다는 문제",
-    "전문 데이터 접근 비용, 보안, 개인정보, 법률 문제",
-    "이 논문의 핵심 문제, 연구 질문, 방법, 결과, 기여, 한계",
-    "왜 이 문제가 중요한지 직접 선언하는 문장",
-    "문제의 답이나 해결 방향"
-  ];
-  const soundsTooLateForFirstPage = (text: string) =>
-    /전문|개인정보|비용|보안|법률|의료|현장|부족|접근|연구\s*질문|방법|결과|기여|한계|해결|문제/.test(text);
-  const soundsLikeInventedOpeningMetaphor = (text: string) =>
-    /고양이|상자|서랍|창고|버튼|게임|동화|전설|외계|마법|왕국|퀘스트|카드|몬스터|로봇이야기|이야기\s*\d+/.test(text);
-  const unsafeFirstPageText = (text: string) =>
-    soundsTooLateForFirstPage(text) || soundsLikeInventedOpeningMetaphor(text);
-  const firstPageAllowed = (items: string[] | undefined) =>
-    Array.isArray(items)
-      ? items.filter((item) => !unsafeFirstPageText(String(item || "")))
-      : [];
-  const storyUnits = (explicitUnits.length > 0 ? explicitUnits : fallbackUnits).map((unit, index) => {
-    const fallback = fallbackUnits[Math.min(index, fallbackUnits.length - 1)];
-    const openingScene = index === 0 && unsafeFirstPageText(unit.opening_scene || "")
-      ? fallback.opening_scene
-      : unit.opening_scene || fallback.opening_scene;
-    const pageReveal = index === 0 && unsafeFirstPageText(unit.page_reveal || "")
-      ? fallback.page_reveal
-      : unit.page_reveal || fallback.page_reveal;
-    return {
-      ...fallback,
-      ...unit,
-      opening_scene: openingScene,
-      page_reveal: pageReveal,
-      page_speech_flow: index === 0 && unsafeFirstPageText(unit.page_speech_flow || "")
-        ? fallback.page_speech_flow
-        : unit.page_speech_flow || fallback.page_speech_flow,
-      allowed_content: index === 0
-        ? mergeUnique(firstPageAllowed(unit.allowed_content), fallback.allowed_content)
-        : mergeUnique(unit.allowed_content, fallback.allowed_content),
-      forbidden_content: index === 0
-        ? mergeUnique(firstPageNeverSay, unit.forbidden_content, fallback.forbidden_content)
-        : mergeUnique(unit.forbidden_content, fallback.forbidden_content),
-      next_page_tease: unit.next_page_tease || fallback.next_page_tease,
-      dont_explain_yet: unit.dont_explain_yet || fallback.dont_explain_yet,
-      source_cue: unit.source_cue || fallback.source_cue || ""
-    };
-  });
-  const formatUnitList = (items: string[] | undefined, fallback: string) =>
-    (Array.isArray(items) && items.length > 0 ? items : [fallback])
-      .map((item) => `     - ${item}`)
-      .join("\n");
-
-  const lines: string[] = [
-    "[PAPER MODE]",
-    `- title: ${brief.paper_title}`,
-    `- domain: ${brief.domain_guess}`,
-    `- track: ${brief.paper_mode_track === "methodology_focus" ? "방법론 중심" : "대중형 요약"}`,
-    "",
-    "[PAPER LEARNING STORY]",
-    "- 처음부터 논문이 뭘 해결했는지 말하지 않습니다. 독자가 먼저 그 세계를 보고, 그 다음에 틈을 느끼고, 그 뒤에야 연구 질문으로 넘어갑니다.",
-    "- 기본 흐름: 원래 세계 → 기대하던 흐름 → 작은 틈 → 중요해지는 이유 → 기존 한계 → 연구 질문 → 방법 → 검증 → 결과의 의미 → 한계와 남은 질문",
-    "- 한 페이지는 하나의 걸음입니다. 인접 단계를 합칠 수는 있지만, 한 페이지에 세 걸음 이상 몰아넣지 않습니다.",
-    "- 첫 페이지에서는 임의의 비유를 발명하지 않습니다. 논문이 실제로 다루는 분야의 자료, 사람, 도구, 화면, 현장을 보여주세요.",
-    "",
-    "[OPENING SCENE SEEDS]",
-    "- 아래 항목은 첫 말풍선 후보가 아니라 장면의 씨앗입니다. 설명문으로 그대로 쓰지 말고, 눈앞에서 보이는 장면으로 바꾸세요.",
-    ...(
-      (Array.isArray(brief.opening_candidates) && brief.opening_candidates.length > 0
-        ? brief.opening_candidates
-        : [brief.reader_hook_example, brief.motivation_context].filter(Boolean)
-      ).map((item) => `- ${item}`)
-    ),
-    "",
-    "[PAPER STORY UNITS]",
-    ...storyUnits.map((unit, index) => [
-      `${index + 1}. ${unit.step}`,
-      `   reader_question: ${unit.reader_question}`,
-      `   opening_scene: ${unit.opening_scene}`,
-      `   page_reveal: ${unit.page_reveal}`,
-      `   page_speech_flow: ${unit.page_speech_flow || ""}`,
-      `   dont_explain_yet: ${unit.dont_explain_yet || "없음"}`,
-      `   allowed_content:\n${formatUnitList(unit.allowed_content, unit.page_reveal || unit.opening_scene || "이 페이지의 작은 한 걸음만 다룬다.")}`,
-      `   forbidden_content:\n${formatUnitList(unit.forbidden_content, unit.dont_explain_yet || "다음 페이지 이후의 정보는 앞당기지 않는다.")}`,
-      `   next_page_tease: ${unit.next_page_tease || "없음"}`,
-      unit.source_cue ? `   source_cue: ${unit.source_cue}` : ""
-    ].filter(Boolean).join("\n")),
-    "",
-    "[PAGE BUDGET]",
-    brief.page_budget_note || `normal은 ${Math.max(brief.page_suggestions?.normal || 0, Math.min(storyUnits.length, 10))}페이지 안팎을 권장합니다. 줄일 때는 인접한 배경/중요성, 한계/마무리만 합치고 방법/검증/결과를 한 페이지에 몰아넣지 마세요.`,
-    "",
-    "[ONE LINE TAKEAWAY]",
-    brief.one_line_takeaway || "핵심 한 줄 요약 없음",
-    "",
-    "[MOTIVATION CONTEXT]",
-    brief.motivation_context || "연구 배경 요약 없음",
-    ""
-  ];
-
-  if (brief.reader_hook_example) {
-    lines.push("[READER HOOK EXAMPLE]");
-    lines.push(brief.reader_hook_example);
-    lines.push("");
-  }
-
-  lines.push(
-    "[CORE PROBLEM]",
-    brief.core_problem || "핵심 문제 요약 없음",
-    ""
-  );
-
-  if (brief.research_question) {
-    lines.push("[RESEARCH QUESTION]");
-    lines.push(brief.research_question);
-    lines.push("");
-  }
-
-  if (brief.prior_limitations.length > 0) {
-    lines.push("[PRIOR LIMITATIONS]");
-    for (const item of brief.prior_limitations) lines.push(`- ${item}`);
-    lines.push("");
-  }
-
-  if (brief.main_contributions.length > 0) {
-    lines.push("[MAIN CONTRIBUTIONS]");
-    for (const item of brief.main_contributions) lines.push(`- ${item}`);
-    lines.push("");
-  }
-
-  lines.push("[METHOD SUMMARY]");
-  lines.push(brief.method_summary || "방법 요약 없음");
-  lines.push("");
-  lines.push("[RESULT SUMMARY]");
-  lines.push(brief.result_summary || "결과 요약 없음");
-  lines.push("");
-
-  if (brief.limitations.length > 0) {
-    lines.push("[LIMITATIONS]");
-    for (const item of brief.limitations) lines.push(`- ${item}`);
-    lines.push("");
-  }
-
-  if (brief.source_cues.length > 0) {
-    lines.push("[SOURCE CUES]");
-    for (const item of brief.source_cues) lines.push(`- ${item}`);
-    lines.push("");
-  }
-
-  if (brief.warnings.length > 0) {
-    lines.push("[WARNINGS]");
-    for (const item of brief.warnings) lines.push(`- ${item}`);
-    lines.push("");
-  }
-
-  lines.push("[PAPER COMIC INSTRUCTIONS]");
-  lines.push(
-    brief.paper_mode_track === "methodology_focus"
-      ? "- 방법 설명이 중심이어도, 첫 페이지는 반드시 원래 세상/배경 장면을 먼저 보여주고, 기존 접근의 한계를 거쳐 방법 구조로 넘어가세요."
-      : "- 기술 세부보다 독자가 배경을 보고 문제의 틈을 발견한 뒤, 무엇이 새롭고 어떤 의미가 있는지 이해하게 하세요."
-  );
-  lines.push("- 첫 페이지는 '왜 중요한가'를 바로 말하지 말고, 그 중요성이 생기는 배경 세계나 독자가 공감할 예시를 먼저 보여주세요.");
-  lines.push("- 첫 페이지에서는 배경의 공기만 보여줘도 충분합니다. 전문 데이터 부족, 비용, 보안, 개인정보, 연구 질문, 방법, 결과는 다음 페이지 이후의 말입니다.");
-  lines.push("- 초반 흐름은 '원래 세상 -> 이상한 틈 -> 중요성 -> 기존 한계 -> 연구 질문' 순서로 자연스럽게 늦춰 전개하세요.");
-  lines.push("- [PAPER STORY UNITS]가 있으면 각 페이지는 해당 unit의 allowed_content 안에서만 설명하고, forbidden_content에 있는 정보는 대사/나레이션/화면 텍스트/장면 설명에 앞당겨 넣지 마세요.");
-  lines.push("- next_page_tease는 페이지 끝의 작은 힌트로만 쓰세요. 힌트를 던진 뒤 같은 페이지에서 답까지 설명하면 실패입니다.");
-  lines.push("- 방법/결과/기여/한계를 한 페이지에 몰아넣지 마세요. 독자의 생각이 한 번에 한 걸음만 움직이게 배분하세요.");
-  lines.push("- reader_hook_example이 있으면 도입 컷에서 우선 활용하고, 없으면 motivation_context를 장면형 설명으로 풀어주세요.");
-  lines.push("- public_summary는 배경/틈/의미를 넉넉히, methodology_focus는 배경/기존 한계 후 방법/검증을 넉넉히 다루세요.");
-  lines.push("- 마지막 페이지는 정보 목록이 아니라, 앞에서 따라온 흐름을 한 번 붙잡으며 논문이 남긴 의미와 조심할 점을 정리하세요.");
-  lines.push("- 본문 컷에 claim/evidence/caveat 태그를 노출하지 말고, 근거와 한계는 자연스러운 말이나 마지막 의미 정리로만 드러내세요.");
-
-  return lines.join("\n").trim();
-};
-
+const buildPaperResearchPackNotes = (brief: PaperBrief): string =>
+  String(brief.explainer_story || "").trim() ||
+  "해설 원고 없음. 논문 본문을 바탕으로 먼저 읽히는 설명 서사를 구성하세요.";
 const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief): SeriesPlan => {
   if (!Array.isArray(plan.pages) || plan.pages.length === 0) return plan;
 
@@ -1462,15 +1053,13 @@ const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief):
   const limitationLine = brief.limitations[0] || "한계는 후속 검증이 필요할 수 있음";
   const contributionsJoined = brief.main_contributions.slice(0, 2).join(" / ") || "주요 기여 요약";
   const openingMemory =
-    brief.paper_story_units?.[0]?.page_reveal ||
+    brief.explainer_story.split(/\n{2,}/)[0]?.trim() ||
     brief.motivation_context ||
     "처음에는 이 연구가 놓인 배경부터 살펴봤어요.";
   const problemMemory =
     brief.core_problem ||
-    brief.paper_story_units?.[1]?.page_reveal ||
     "그 안에서 그냥 넘기기 어려운 틈이 보였죠.";
   const finalMeaning =
-    brief.paper_story_units?.[brief.paper_story_units.length - 1]?.page_reveal ||
     brief.one_line_takeaway ||
     "이 논문은 그 틈을 이해하는 새 단서를 남겼어요.";
 
@@ -1670,7 +1259,7 @@ export const generatePlan = async (params: {
   - medium: 컷 전체에 1~2회 정도(권장).
   - high: 컷마다 가벼운 코미디 리듬을 유지하되, 설명은 명료하게.
 - 금지: 욕설/혐오/조롱/비하/노골적 성적 표현/특정 집단을 웃음 소재로 삼기.
-- 정보 왜곡 금지: 웃기려고 정의/사실/인과를 바꾸지 마세요. 불확실하면 UNKNOWN 또는 "추가 리서치 필요".`
+- 정보 왜곡 금지: 웃기려고 정의/사실/인과를 바꾸지 마세요. 불확실하면 확인 불가 또는 "추가 리서치 필요".`
       : `
 - 목표: 정확하고 명확하게 설명하세요. (가벼운 위트는 0~1회 정도만 허용)
 - 우선순위: 정확성/명확성 > 재미.
@@ -1708,7 +1297,7 @@ export const generatePlan = async (params: {
       return `
 
 [질문 형태: 리뷰(Review) - 매우 중요]
-- 광고/선동/과장 문구를 쓰지 마세요. 근거가 부족하면 "UNKNOWN" 또는 "추가 확인 필요"로 처리하세요.
+- 광고/선동/과장 문구를 쓰지 마세요. 근거가 부족하면 "확인 불가" 또는 "추가 확인 필요"로 처리하세요.
 - 먼저 평가 기준(3~7개)을 선언하고, 각 기준별로 장점/단점을 균형 있게 제시하세요.
 - "무조건 추천/최고/최악" 같은 단정은 금지. 마지막 컷은 "누구에게/어떤 조건에서 추천·비추천" 조건부 결론으로 마무리하세요.
 - 가격/스펙/수치/연도/고유명사는 확인 가능한 범위에서만 사용하고, 불명확하면 넣지 마세요.`
@@ -1871,6 +1460,17 @@ ${isActionTopic
     return "드물게";
   };
 
+  const inferSpeechRegister = (c: CharacterSpec): string => {
+    const probe = `${c.persona || ""} ${c.catchphrase || ""}`;
+    if (/(존댓말|정중|공손|높임|높임말|해요체|합니다체|하십시오|~요|합니다|해요|polite|formal|honorific)/i.test(probe)) {
+      return "존댓말/정중체";
+    }
+    if (/(반말|친근|편한 말투|거친|무뚝뚝|툭툭|해체|해라체|~야|~지|~잖아|informal|casual|banmal)/i.test(probe)) {
+      return "반말/친근체";
+    }
+    return "미지정: 첫 대사에서 정한 존댓말/반말을 끝까지 유지";
+  };
+
   const formatCharacterLine = (c: CharacterSpec): string => {
     const name = String(c.name || "").trim() || "이름없음";
     const appearance = String(c.appearance || "").trim();
@@ -1880,6 +1480,7 @@ ${isActionTopic
     if (appearance) parts.push(`외형/복장: ${appearance}`);
     if (persona) parts.push(`페르소나: ${persona}`);
     if (catchphrase) parts.push(`말버릇(${freqLabel(c.catchphrase_frequency)}): "${catchphrase}"`);
+    parts.push(`말투 고정: ${inferSpeechRegister(c)}`);
     return parts.join(" / ");
   };
 
@@ -1889,6 +1490,9 @@ ${isActionTopic
 
 [캐스트(주연/조연) - 매우 중요]
 - 아래 캐릭터들의 이름/외형/복장/말투/페르소나가 페이지 전체에서 일관되게 유지되어야 합니다.
+- 캐릭터마다 존댓말/반말 레지스터를 하나로 고정하세요. 한 캐릭터가 전체 스크립트 안에서 존댓말과 반말을 오가면 실패입니다.
+- 페르소나/말버릇에 존댓말/반말 단서가 있으면 그것을 최우선으로 따르세요. 단서가 없으면 첫 대사에서 정한 높임/반말을 그 캐릭터의 고정 말투로 유지하세요.
+- 말끝 리듬은 다양하게 해도, 존댓말 캐릭터는 존댓말 안에서만, 반말 캐릭터는 반말 안에서만 변주하세요.
 - 말버릇은 '빈도'를 존중해 남발하지 마세요.
 ${isKlingI2V
         ? '- I2V 모드에서는 dialogues를 "음성 대사"로 작성하며, 화자 포함 형식("화자: 대사")을 권장합니다.'
@@ -1907,6 +1511,7 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
 [주요 등장인물(고정 캐스트) - 매우 중요]
 - ${params.supporting_cast.trim()}
 - 위 인물들은 장면에 등장할 때 이름/외형/복장/말투가 페이지 전체에서 일관되게 유지되어야 합니다.
+- 인물마다 존댓말/반말 레지스터를 하나로 고정하세요. 말끝 리듬은 바꿔도 높임/반말을 섞지 마세요.
 ${isKlingI2V
       ? '- I2V 모드에서는 dialogues를 "음성 대사"로 작성하며, 화자 포함 형식("화자: 대사")을 권장합니다.'
       : "- 단, 대사(dialogues)에는 화자 이름 표시는 절대 넣지 마세요. (말풍선엔 순수 대사만)"}
@@ -2066,7 +1671,7 @@ ${isKlingI2V
 
 [독자 수준: 준전문(Intermediate) - 매우 중요]
 - 정확도를 유지하되, 핵심 용어는 장면 속 필요가 생긴 뒤 짧게 이름 붙이고 단계적으로 쌓아가세요.
-- 단정적 결론은 근거가 있을 때만, 없으면 조건부/UNKNOWN 처리하세요.`;
+- 단정적 결론은 근거가 있을 때만, 없으면 조건부/확인 불가 처리하세요.`;
 
   const audienceInstructionEduCinematic =
     params.audience_level === "kids"
@@ -2159,39 +1764,37 @@ ${isKlingI2V
   const shouldUsePlannerWebSearch = researchMode === "auto_gemini";
   const researchNotes = params.research?.pack?.notes?.trim();
   const researchSources = params.research?.pack?.sources || [];
-  const isPaperStoryResearchPack = Boolean(researchNotes && /\[PAPER STORY UNITS\]/.test(researchNotes));
 
   const debugChunks: PlannerDebugChunk[] = [];
 
   const researchInstruction = usingProvidedResearch
     ? `
 
-[사용자 제공 리서치 팩 - 최우선]
-- 아래 리서치 팩에 포함된 정보만 사용하세요. 모르는 내용은 추측하지 말고 "UNKNOWN"으로 표시하세요.
-- 리서치 팩에 근거가 없는 주장/수치/인명/연도/원인-결과 관계를 임의로 만들지 마세요.
-- 논문만화 리서치 팩에 [PAPER STORY UNITS]가 있으면 [LEARNING UNITS]보다 우선하세요. 각 unit은 "이 페이지는 여기까지만"이라는 약속입니다. allowed_content, forbidden_content, next_page_tease를 페이지 아웃라인과 최종 대사에 반드시 반영하세요.
-- 논문만화에서는 1페이지가 제일 중요합니다. 1페이지는 배경의 공기와 눈앞의 상황만 보여주고, 전문 데이터 부족/비용/보안/개인정보/연구 질문/방법/결과/기여/한계는 말하지 마세요.
+[사용자 제공 원고 - 최우선]
+- 아래 원고/자료에 포함된 정보만 사용하세요. 모르는 내용은 추측하지 말고 "확인 불가"로만 남기세요.
+- 아래 원고/자료에 근거가 없는 주장, 수치, 인명, 연도, 원인-결과 관계를 임의로 만들지 마세요.
+- 원고가 소설처럼 이어지는 해설 서사라면, 그것을 원작 원고처럼 다루세요. 먼저 항목 요약으로 다시 압축하지 말고, 장면, 질문, 발견의 순서를 페이지에 나누어 담으세요.
+- 설명문, 리포트, 개요서처럼 다시 정리하지 마세요. 원고의 결을 보존한 채 페이지로만 나누세요.
+- 논문만화에서는 1페이지가 제일 중요합니다. 1페이지는 배경의 공기와 눈앞의 상황만 보여주고, 전문 데이터 부족, 비용, 보안, 개인정보, 연구 질문, 방법, 결과, 기여, 한계는 말하지 마세요.
 - 논문만화 1페이지에서는 논문에 없는 가짜 예시를 새로 만들지 마세요. 고양이 이야기, 상자, 창고, 버튼, 게임, 동화 같은 임의의 비유 대신 실제 연구 배경의 자료, 사람, 도구, 화면을 보여주세요.
-- 최종 페이지 생성에서 [이번 페이지에서만 볼 재료 - 논문만화]가 함께 오면, 그 블록이 가장 마지막 약속입니다. 전체 리서치 팩을 떠올려 뒤 페이지 정보를 앞당기지 마세요.
-- 학습만화에서 리서치 팩의 [FRAMING]이 [LEARNING UNITS]와 충돌하면 [LEARNING UNITS]를 우선하세요.
-- "첫 장면은 정의로 바로 시작", "첫 말풍선은 ○○란..." 같은 FRAMING은 제작 메모로만 참고하고, 실제 1페이지 오프닝은 상황/대비/궁금증에서 시작하도록 재구성하세요.
-- 만약 리서치 팩이 비어 있거나 불충분하면, 가장 안전한 범위(일반 원리/정의 수준)에서만 구성하세요.`
+- 최종 페이지 생성에서 [이번 페이지에서만 볼 재료 - 논문만화]가 함께 오면, 그 블록이 가장 마지막 약속입니다. 전체 원고를 떠올려 뒤 페이지 정보를 앞당기지 마세요.
+- 만약 원고/자료가 비어 있거나 불충분하면, 가장 안전한 범위에서만 구성하세요.`
     : "";
 
   const researchInstructionEduCinematic = usingProvidedResearch
     ? `
 
-[리서치 팩 사용(참고) - Edu-Cinematic]
-- 리서치 팩은 '배경/디테일/설정 재료'로 참고하되, 설명형 보고서로 재구성하지 마세요.
-- 리서치 팩에 없는 구체적 사실(연도/수치/실존 사건)을 사실처럼 단정해서 추가하지 마세요.
+[원고/자료 사용(참고) - Edu-Cinematic]
+- 제공된 원고/자료는 '배경/디테일/설정 재료'로 참고하되, 설명형 보고서로 재구성하지 마세요.
+- 제공된 원고/자료에 없는 구체적 사실(연도/수치/실존 사건)을 사실처럼 단정해서 추가하지 마세요.
 - 대결/사건/승패 등 서사는 가상의 what-if로 창작할 수 있습니다. (단, 특정 인물 비방/모욕/명예훼손성 설정 금지)`
     : "";
 
   const researchInstructionPureCinematic = usingProvidedResearch
     ? `
 
-[리서치 팩 사용(월드빌딩 참고) - Cinematic]
-- 리서치 팩은 분위기/디테일/소재 확장용으로만 사용하세요.
+[원고/자료 사용(월드빌딩 참고) - Cinematic]
+- 제공된 원고/자료는 분위기/디테일/소재 확장용으로만 사용하세요.
 - 사실 나열형 보고서로 재작성하지 말고, 장면 안의 단서/소품/행동으로 녹여내세요.
 - 실존 개인/집단에 대한 비방·허위사실 단정·명예훼손성 서사는 금지입니다.`
     : "";
@@ -2386,9 +1989,8 @@ ${mangaColorMode === "bw" ? "6. 흑백 스크린톤 스타일입니다. scene �
 - 정의/뜻/사용 상황/예문/해석/주의점/요약을 한 페이지에 모두 넣지 마세요.
 - 각 페이지의 목표는 "많이 알려주기"가 아니라 "상황 느끼기 / 필요성 발견 / 이름 붙이기 / 예문 확인 / 비교하기 / 오해 바로잡기 / 연습하기 / 정리하기" 중 하나에 가깝게 잡으세요.
 - 1페이지는 기본적으로 정의문 오프닝이 아니라 상황/대비/궁금증 오프닝이어야 합니다. "조리개란...", "as if란...", "무지개란..."처럼 용어 정의로 첫 말풍선을 시작하면 실패입니다. 먼저 독자가 볼 수 있는 현상이나 곤란함을 만들고, 이름 붙이기는 다음 컷이나 다음 페이지로 넘기세요.
-- 리서치 팩에 [LEARNING UNITS]가 있으면 그 순서를 페이지 분배의 뼈대로 삼으세요. [FRAMING]의 문구가 정의로 시작하라고 해도, [LEARNING UNITS]가 상황/필요성/이름 붙이기 순서라면 그 순서를 우선하세요.
-- 목표 페이지 수가 learning unit 수와 같거나 더 많으면, 원칙적으로 unit 하나를 한 페이지에 배정하세요. 목표 페이지 수가 더 적을 때만 인접한 저부담 unit 2개까지 합칠 수 있고, 1페이지에 3개 이상의 학습 행동을 합치면 실패입니다.
-- 논문만화에 [PAPER STORY UNITS]가 있으면 그 순서를 페이지 분배의 최우선 뼈대로 삼으세요. 각 unit은 "이 페이지는 여기까지만"이라는 약속입니다. allowed_content 안에서만 말하고, forbidden_content에 적힌 내용은 대사/나레이션/화면 텍스트/scene 정보로도 앞당기지 마세요.
+- 제공된 원고/자료는 해설 원고입니다. 문단 순서와 장면 전환을 페이지 분배의 뼈대로 삼고, 별도의 내부 기획서로 다시 만들지 마세요.
+- 목표 페이지 수가 충분하면 해설 원고의 주요 장면 전환을 각각 한 페이지에 배정하세요. 목표 페이지 수가 더 적을 때만 인접한 저부담 문단 2개까지 합칠 수 있고, 1페이지에 3개 이상의 학습 행동을 합치면 실패입니다.
 - 논문만화 첫 페이지는 특히 느리게 시작하세요. 공개된 자료가 많다, 모델이 많이 볼수록 배울 기회가 생긴다 정도만 보여줘도 충분합니다. 전문 영역 자료가 부족하다, 개인정보, 비용, 보안 같은 말은 다음 페이지 이후의 말입니다.
 - 논문만화 첫 페이지에서는 임의의 비유를 새로 만들지 마세요. 가짜 동물 이야기, 상자/창고/버튼/게임 같은 장치가 나오면 독자가 논문 배경을 놓칩니다. 실제 논문이 다루는 자료와 화면을 보여주세요.
 - next_page_tease는 페이지 끝에서 다음 궁금증을 여는 용도입니다. 같은 페이지에서 그 답을 설명하면 실패입니다.
@@ -2493,6 +2095,7 @@ ${mangaColorMode === "bw" ? "6. 흑백 스크린톤 스타일입니다. scene �
 - 같은 페이지의 말풍선들이 모두 같은 설명형 종결어미로 끝나지 않게 하세요. 특히 "~요/~예요/~이에요" 계열을 연속 반복해 정의문 목록처럼 만들지 마세요.
 - 한 페이지의 설명자/가이드 대사가 모두 같은 어미 계열로 끝나면 실패입니다. "~예요/~이에요", "~해요/~돼요", "~볼게요/~갈게요", "~주세요" 같은 존댓말 설명 종결을 같은 페이지에서 반복하지 마세요.
 - 설명자/가이드 대사에는 최소 3가지 이상의 종결 리듬을 섞으세요: 질문형, 관찰형, 이유/원리형, 짧은 반응형, 명사형 정리, 행동 유도형 중 장면에 맞게 분산합니다.
+- 단, 종결 리듬을 섞는다는 뜻은 존댓말/반말을 섞으라는 뜻이 아닙니다. 캐릭터별 높임/반말은 고정하고, 그 레지스터 안에서만 어미를 바꾸세요.
 - 행동 유도형("~해볼게요", "~맞춰주세요", "~가요")은 한 페이지에 많이 쓰면 튜토리얼처럼 보입니다. 꼭 필요한 컷에만 1번 정도 사용하세요.
 - 문장 기능을 섞으세요: 관찰, 질문, 짧은 반응, 원인/결과 연결, 다음 행동 제안, 확인/정리 중 장면에 맞는 기능을 배치하세요.
 - 정중한 톤을 유지하더라도 모든 말풍선을 완결된 설명문으로 닫지 말고, 장면 속 대화 리듬이 느껴지게 종결 방식을 바꾸세요.
@@ -2519,6 +2122,7 @@ ${mangaColorMode === "bw" ? "6. 흑백 스크린톤 스타일입니다. scene �
 - "~해", "~만들어", "~빼", "~줄여"처럼 독자가 행동 지시로 읽을 수 있는 종결을 연속해서 쓰지 마세요. 현상 관찰, 상태 변화, 이유 설명, 정리 문장으로 종결을 섞으세요.
 - "~이에요", "~해요", "~돼요", "~볼게요", "~주세요"처럼 같은 높임말 설명 종결이 이어지면 기계적인 선생님 말투가 됩니다. 설명자/가이드 말만 이어 붙였을 때 같은 어미 계열이 3번 이상 반복되면 다시 쓰세요.
 - 반말 캐릭터면 반말 안에서도 "~야", "~거든", "~지", "~잖아", "~거야", 짧은 감탄/명사형 정리를 섞고, 존댓말 캐릭터면 존댓말 안에서도 질문/관찰/정리/리액션의 끝맺음을 섞으세요. 한 가지 말끝으로 통일하지 마세요.
+- 한 캐릭터가 같은 원고 안에서 존댓말과 반말을 번갈아 쓰면 실패입니다. 어미 변주는 반드시 그 캐릭터의 고정 말투 안에서만 하세요.
 - 설명은 조작 순서가 아니라 장면 안에서 벌어지는 현상으로 말하세요. "A하고 B하고 C한다"보다 "A가 이렇게 되니까 B가 일어난다"는 흐름이 좋습니다.
 - 대사를 확정하기 전에 설명자/가이드 말만 이어 붙여 읽어보세요. 그 결과가 말풍선으로 쪼갠 설명문 목록처럼 들리면, 생활감 있는 질문/관찰에서 시작하는 한 편의 설명 대화로 다시 쓰세요.`
       : `
@@ -2618,7 +2222,7 @@ ${isDynamicLayout ? `- 레이아웃: 다이나믹 (핵심 패턴 + modifier 조�
 ${deliveryReminder}
 ${outputModeReminder}
 
-${usingProvidedResearch ? "아래 리서치 팩을 바탕으로" : params.audience_level === "kids" ? "이 주제를 초등 저학년이 이해할 만큼 아주 쉽게 검색하고," : "이 주제의 '진짜 본질'을 검색하고,"} 주인공의 역할(${params.character_role === "narrator" ? "설명하는 가이드" : "직접 연기하는 배우"})에 맞춰 시나리오를 작성하세요.
+${usingProvidedResearch ? `아래 해설 원고를 요약/재구성하지 말고, 문단 순서와 장면 흐름을 유지한 채 ${params.page_count}페이지 만화 스크립트로 나누세요.` : params.audience_level === "kids" ? "이 주제를 초등 저학년이 이해할 만큼 아주 쉽게 검색하고," : "이 주제의 '진짜 본질'을 검색하고,"} 주인공의 역할(${params.character_role === "narrator" ? "설명하는 가이드" : "직접 연기하는 배우"})에 맞춰 시나리오를 작성하세요.
 ${dialoguePromptRule}`;
 
   const promptEduCinematic = `주제: "${params.topic}"
@@ -2632,7 +2236,7 @@ ${dialoguePromptRule}`;
 ${deliveryReminder}
 ${outputModeReminder}
 
-${usingProvidedResearch ? "아래 리서치 팩을 참고하되, " : ""}절대 설명하지 말고 영화/드라마처럼 장면으로만 전개하세요. (행동·대사·카메라·무드)
+${usingProvidedResearch ? "아래 원고/자료를 참고하되, " : ""}절대 설명하지 말고 영화/드라마처럼 장면으로만 전개하세요. (행동·대사·카메라·무드)
 ${dialoguePromptRule}`;
 
   const promptPureCinematic = `주제: "${params.topic}"
@@ -2646,7 +2250,7 @@ ${dialoguePromptRule}`;
 ${deliveryReminder}
 ${outputModeReminder}
 
-${usingProvidedResearch ? "아래 리서치 팩을 월드빌딩 참고 재료로만 활용하고, " : ""}강의/해설 톤을 완전히 배제한 순수 시네마틱 스토리로 작성하세요.
+${usingProvidedResearch ? "아래 원고/자료를 월드빌딩 참고 재료로만 활용하고, " : ""}강의/해설 톤을 완전히 배제한 순수 시네마틱 스토리로 작성하세요.
 영화/애니메이션/만화/실사 연출 감각을 적극 활용하되, 모든 컷은 하나의 일관된 작품 세계로 연결하세요.
 ${dialoguePromptRule}`;
 
@@ -2657,10 +2261,10 @@ ${dialoguePromptRule}`;
       : promptLearning;
 
   const researchContext = usingProvidedResearch && researchNotes
-    ? `\n\n[RESEARCH PACK]\n${researchNotes}\n`
+    ? `\n\n[해설 원고]\n${researchNotes}\n`
     : "";
 
-  const maxPagesPerRequest = isPaperStoryResearchPack ? 1 : getGeminiMaxPagesPerRequest();
+  const maxPagesPerRequest = getGeminiMaxPagesPerRequest();
   const targetPageCount = Math.max(1, Math.floor(params.page_count));
 
   const panelSchema = {
@@ -2906,50 +2510,7 @@ ${dialoguePromptRule}`;
   };
 
   const buildPaperPageOnlyContext = (startIndex: number, count: number, outline?: PlanOutline | null): string => {
-    if (!isPaperStoryResearchPack || !outline) return "";
-    const endIndex = startIndex + count - 1;
-    const relevantEntries = outline.page_outlines.filter(
-      e => e.page_number >= startIndex && e.page_number <= endIndex
-    );
-    if (relevantEntries.length === 0) return "";
-
-    const lines: string[] = [
-      "",
-      "[이번 페이지에서만 볼 재료 - 논문만화]",
-      "전체 리서치 팩을 다시 펼치지 마세요. 지금은 아래 페이지에 필요한 재료만 보고 만화를 씁니다.",
-      "뒤 페이지에 배정된 연구 질문, 방법, 결과, 기여, 한계는 지금 페이지에 미리 넣지 않습니다.",
-      "논문에 없는 가짜 예시를 새로 만들지 마세요. 고양이 이야기, 상자, 창고, 버튼, 게임, 동화 같은 임의의 비유로 시작하지 말고, 논문이 실제로 다루는 분야의 자료와 화면을 보여주세요.",
-      "비유가 필요하면 바로 무엇을 뜻하는지 알 수 있어야 합니다. 비유만 읽고 논문 배경을 알 수 없으면 실패입니다.",
-      "page_speech_flow는 그대로 복붙할 대본이 아니라 말의 호흡입니다. 패널로 나눌 때 자연스럽게 다듬되, 허용된 정보 밖으로 나가지 마세요.",
-      "같은 장면이나 같은 대사를 페이지 안에서 반복하지 마세요. 반복 대신 관찰, 반응, 작은 전환으로 이어가세요.",
-      ""
-    ];
-
-    for (const e of relevantEntries) {
-      lines.push(`[p${e.page_number}] ${e.sub_topic}`);
-      lines.push(`이 페이지는 여기까지만: ${e.content_summary}`);
-      if (e.page_number === 1) {
-        lines.push("첫 페이지는 천천히 시작합니다. 배경의 공기와 눈앞의 상황만 보여줘도 충분합니다.");
-        lines.push("첫 페이지에서 말하지 않을 것: 전문 데이터 부족, 비용, 보안, 개인정보, 법률 문제, 연구 질문, 방법, 결과, 기여, 한계.");
-        lines.push("첫 페이지에서 피할 것: 논문에 없는 고양이 이야기, 상자, 창고, 버튼, 게임, 동화 같은 임의의 비유.");
-      }
-      if (e.opening_scene) lines.push(`첫 장면: ${e.opening_scene}`);
-      if (e.reader_question) lines.push(`독자가 품을 궁금증: ${e.reader_question}`);
-      if (e.page_speech_flow) lines.push(`말의 흐름: ${e.page_speech_flow}`);
-      if (Array.isArray(e.allowed_content) && e.allowed_content.length > 0) {
-        lines.push("말해도 되는 것:");
-        for (const item of e.allowed_content) lines.push(`- ${item}`);
-      }
-      if (Array.isArray(e.forbidden_content) && e.forbidden_content.length > 0) {
-        lines.push("아직 말하지 않을 것:");
-        for (const item of e.forbidden_content) lines.push(`- ${item}`);
-      }
-      if (e.next_page_tease) lines.push(`마지막에 남길 작은 궁금증: ${e.next_page_tease}`);
-      if (e.page_reveal) lines.push(`페이지 끝에서 붙잡을 것: ${e.page_reveal}`);
-      lines.push("");
-    }
-
-    return `\n${lines.join("\n")}`;
+    return "";
   };
 
   const requestPlanner = async (contents: string, responseSchema: any, enableSearch: boolean, schemaName: string) => {
@@ -2994,14 +2555,10 @@ ${dialoguePromptRule}`;
   - page_speech_flow는 제작자가 조용히 읽어봤을 때 사람 말처럼 이어지는 짧은 흐름이어야 합니다. 발표문, 지시문, 규칙 설명처럼 쓰지 마세요.
   - opening_scene은 설명 문장이 아니라 실제로 그릴 수 있는 장면이어야 합니다. "조리개란...", "오늘은..." 같은 말풍선 시작문을 opening_scene에 쓰지 마세요.
   - page_reveal은 대단한 결론이 아니라도 됩니다. 독자가 "그래서 이 다음을 보면 되겠구나" 하고 한 발짝 이동하는 정도면 충분합니다.
-  - 리서치/핵심정리에 [PAPER STORY UNITS]가 있으면 [LEARNING UNITS]보다 우선하고, unit 순서를 기본 페이지 순서로 사용하세요.
-  - 논문만화 1페이지는 첫 PAPER STORY UNIT만 사용하세요. 배경의 공기와 눈앞의 상황만 보여주고, 전문 데이터 부족/비용/보안/개인정보/연구 질문/방법/결과/기여/한계는 앞당기지 마세요.
-  - 논문만화 첫 3개 unit(원래 세계/기대하던 흐름/작은 틈)은 6페이지 이상에서는 합치지 마세요. 줄여야 할 때는 뒤쪽의 검증+결과 의미, 한계+마무리처럼 독자 부담이 낮은 인접 단계부터 합치세요.
-  - 각 페이지 outline에는 unit의 allowed_content, forbidden_content, next_page_tease를 복사하거나 좁혀 쓰세요. content_summary/page_reveal/dialogue_goal/page_speech_flow에 forbidden_content가 섞이면 실패입니다.
-  - 리서치/핵심정리에 [LEARNING UNITS]가 번호로 정리되어 있으면, 그 순서를 아웃라인의 기본 페이지 순서로 사용하세요. targetPageCount가 unit 수 이상이면 unit 하나를 페이지 하나로 매핑하세요.
-  - targetPageCount가 unit 수보다 적을 때만 인접한 저부담 unit 2개를 합칠 수 있습니다. 첫 페이지에는 상황/필요성/이름 붙이기 중 최대 2개까지만 허용하고, 핵심 기능/결과 비교/오해/요약까지 끌어오지 마세요.
+  - 리서치/핵심정리는 해설 원고입니다. 문단 순서와 장면 전환을 그대로 페이지에 나누세요. 원고를 먼저 항목 요약/정의 목록으로 재작성하지 마세요.
+  - 논문만화 1페이지는 해설 원고의 첫 장면만 사용하세요. 배경의 공기와 눈앞의 상황만 보여주고, 전문 데이터 부족/비용/보안/개인정보/연구 질문/방법/결과/기여/한계는 앞당기지 마세요.
+  - 목표 페이지 수가 부족할 때만 인접한 저부담 문단 2개를 합칠 수 있습니다. 첫 페이지에는 상황/필요성/이름 붙이기 중 최대 2개까지만 허용하고, 핵심 기능/결과 비교/오해/요약까지 끌어오지 마세요.
   - 1페이지 content_summary는 용어 정의가 아니라 독자가 눈으로 볼 수 있는 상황, 대비, 궁금증, 문제에서 시작하세요. "○○란..."으로 바로 시작하는 opening/definition-first 아웃라인은 실패입니다.
-  - [FRAMING]에 정의로 시작하라는 문장이 있어도, [LEARNING UNITS]와 충돌하면 [LEARNING UNITS]를 우선하고 FRAMING은 시각 톤 참고로만 쓰세요.
   - 한 페이지에 정의/뜻/사용 상황/예문/해석/주의점/요약이 3개 이상 함께 들어가면 과밀입니다. density_note에 무엇을 줄였는지 적고 content_summary를 다시 좁히세요.
   - 절차/방법/언어 문법 주제는 "상황 느끼기 → 필요성 발견 → 이름 붙이기 → 예문/단계 확인 → 비교/주의점 → 연습/정리"처럼 독자가 따라갈 학습 행동 흐름으로 배분하세요.
   - 페이지 수가 고정되어 있어도 한 페이지가 여러 역할을 떠안게 만들지 마세요. 덜 중요한 예외/요약/부가 설명은 과감히 생략하거나 그림으로 넘기세요.` : ""}
@@ -3061,12 +2618,12 @@ ${dialoguePromptRule}`;
     return lines.join("\n");
   };
 
-  const paperFirstPageLatePattern = /전문|개인정보|비용|보안|법률|의료|현장|부족|접근|연구\s*질문|방법|결과|기여|한계|해결|문제/;
-  const paperFirstPageInventedMetaphorPattern = /고양이|상자|서랍|창고|버튼|게임|동화|전설|외계|마법|왕국|퀘스트|카드|몬스터|이야기\s*\d+/;
+  const paperFirstPageLatePattern = /연구\s*질문|방법론|실험\s*결과|결과\s*요약|핵심\s*기여|한계|해결책/;
+  const paperFirstPageInventedMetaphorPattern = /논문과\s*무관|근거\s*없는\s*비유|랜덤\s*비유|아무\s*관련\s*없는/;
   const unsafePaperFirstPagePattern = (text: string) =>
     paperFirstPageLatePattern.test(text) || paperFirstPageInventedMetaphorPattern.test(text);
   const sanitizePaperFirstOutlineEntry = (entry: PageOutlineEntry): PageOutlineEntry => {
-    if (!isPaperStoryResearchPack || entry.page_number !== 1) return entry;
+    if (entry.page_number !== 1) return entry;
 
     const firstForbidden = [
       "전문 데이터가 부족하다는 문제",
@@ -3339,11 +2896,11 @@ ${dialoguePromptRule}`;
   };
 
   const runChunk = async (startIndex: number, count: number, priorTitles: string[], includePlanMeta: boolean, outlineContext: string, outline?: PlanOutline | null) => {
-    const effectiveOutlineContext = isPaperStoryResearchPack ? "" : outlineContext;
+    const effectiveOutlineContext = outlineContext;
     const pageOnlyContext = buildPaperPageOnlyContext(startIndex, count, outline);
     const baseContents = `${prompt}${effectiveOutlineContext}${pageRangeHint(startIndex, count, priorTitles, outline)}${pageOnlyContext}`;
     const contentsWithoutResearch = baseContents;
-    const contentsWithResearch = isPaperStoryResearchPack ? baseContents : `${baseContents}${researchContext}`;
+    const contentsWithResearch = `${baseContents}${researchContext}`;
     const schema = includePlanMeta ? fullResponseSchema(count) : pagesOnlyResponseSchema(count);
     const enableSearch = includePlanMeta && shouldUsePlannerWebSearch;
     const resp = await requestPlanner(contentsWithResearch, schema, enableSearch, includePlanMeta ? "planner_full_plan" : "planner_pages_only");
@@ -3364,8 +2921,9 @@ ${dialoguePromptRule}`;
   let outline: PlanOutline | null = null;
   let outlineSection = "";
   let outlineGroundingSources: GroundingSource[] = [];
+  const skipOutlineForProvidedNarrative = usingProvidedResearch && !isAnyCinematic;
 
-  if (targetPageCount > 1) {
+  if (targetPageCount > 1 && !skipOutlineForProvidedNarrative) {
     try {
       const outlinePromptText = buildOutlinePrompt();
       const outlineContents = `${outlinePromptText}${researchContext}`;
@@ -3560,6 +3118,7 @@ ${dialoguePromptRule}`;
 export const generateStoryPlan = async (params: {
   script_text: string;
   story_input_type: StoryInputType;
+  story_adaptation_mode?: StoryAdaptationMode;
   genre?: StoryGenre;
   pacing?: PacingPreference;
   age_rating: AgeRating;
@@ -3585,6 +3144,7 @@ export const generateStoryPlan = async (params: {
   templates: LayoutTemplate[];
   digest_notes?: string;
   story_anti_education_guard?: boolean;
+  use_story_outline?: boolean;
   gemini_reasoning_effort?: GeminiReasoningEffort;
 }): Promise<SeriesPlan> => {
   const startedAt = Date.now();
@@ -3717,16 +3277,30 @@ export const generateStoryPlan = async (params: {
     if (freq === "sometimes") return "가끔";
     return "드물게";
   };
+  const inferSpeechRegister = (c: CharacterSpec): string => {
+    const probe = `${c.persona || ""} ${c.catchphrase || ""}`;
+    if (/(존댓말|정중|공손|높임|높임말|해요체|합니다체|하십시오|~요|합니다|해요|polite|formal|honorific)/i.test(probe)) {
+      return "존댓말/정중체";
+    }
+    if (/(반말|친근|편한 말투|거친|무뚝뚝|툭툭|해체|해라체|~야|~지|~잖아|informal|casual|banmal)/i.test(probe)) {
+      return "반말/친근체";
+    }
+    return "미지정: 첫 대사에서 정한 존댓말/반말을 끝까지 유지";
+  };
   const formatCharacterLine = (c: CharacterSpec): string => {
     const name = String(c.name || "").trim() || "이름없음";
     const parts: string[] = [name];
     if (c.appearance) parts.push(`외형/복장: ${c.appearance.trim()}`);
     if (c.persona) parts.push(`페르소나: ${c.persona.trim()}`);
     if (c.catchphrase) parts.push(`말버릇(${freqLabel(c.catchphrase_frequency)}): "${c.catchphrase.trim()}"`);
+    parts.push(`말투 고정: ${inferSpeechRegister(c)}`);
     return parts.join(" / ");
   };
   const castInstruction = (castProtagonists.length > 0 || castSupporting.length > 0) ? `
 [캐스트]
+- 캐릭터마다 존댓말/반말 레지스터를 하나로 고정하세요. 한 캐릭터가 전체 스크립트 안에서 존댓말과 반말을 오가면 실패입니다.
+- 페르소나/말버릇에 존댓말/반말 단서가 있으면 그것을 최우선으로 따르세요. 단서가 없으면 첫 대사에서 정한 높임/반말을 그 캐릭터의 고정 말투로 유지하세요.
+- 말끝 리듬은 다양하게 해도, 존댓말 캐릭터는 존댓말 안에서만, 반말 캐릭터는 반말 안에서만 변주하세요.
 ${isKlingI2V
     ? '- I2V 모드: dialogues는 화자 포함 형식("화자: 대사")을 권장합니다.'
     : "- 대사(dialogues)에는 화자 이름을 절대 넣지 마세요."}
@@ -3804,6 +3378,7 @@ ${mangaColorMode === "bw" ? "- 흑백 스크린톤 스타일." : "- 풀컬러 �
     ? `- 같은 페이지의 말풍선들이 모두 같은 설명형 종결어미로 끝나지 않게 하세요. 특히 "~요/~예요/~이에요" 계열을 연속 반복해 정의문 목록처럼 만들지 마세요.
 - 한 페이지의 설명자/가이드 대사가 모두 같은 어미 계열로 끝나면 실패입니다. "~예요/~이에요", "~해요/~돼요", "~볼게요/~갈게요", "~주세요" 같은 존댓말 설명 종결을 같은 페이지에서 반복하지 마세요.
 - 설명자/가이드 대사에는 최소 3가지 이상의 종결 리듬을 섞으세요: 질문형, 관찰형, 이유/원리형, 짧은 반응형, 명사형 정리, 행동 유도형 중 장면에 맞게 분산합니다.
+- 단, 종결 리듬을 섞는다는 뜻은 존댓말/반말을 섞으라는 뜻이 아닙니다. 캐릭터별 높임/반말은 고정하고, 그 레지스터 안에서만 어미를 바꾸세요.
 - 행동 유도형("~해볼게요", "~맞춰주세요", "~가요")은 한 페이지에 많이 쓰면 튜토리얼처럼 보입니다. 꼭 필요한 컷에만 1번 정도 사용하세요.
 - 문장 기능을 섞으세요: 관찰, 질문, 짧은 반응, 원인/결과 연결, 다음 행동 제안, 확인/정리 중 장면에 맞는 기능을 배치하세요.`
     : "- Do not end every bubble with the same explanatory sentence pattern. Mix observations, questions, short reactions, cause/effect links, next-action prompts, and brief check/summary beats.";
@@ -3838,6 +3413,7 @@ ${mangaColorMode === "bw" ? "- 흑백 스크린톤 스타일." : "- 풀컬러 �
 - "~해", "~만들어", "~빼", "~줄여"처럼 독자가 행동 지시로 읽을 수 있는 종결을 연속해서 쓰지 말고, 현상 관찰/상태 변화/이유 설명/정리 문장으로 종결을 섞으세요.
 - "~이에요", "~해요", "~돼요", "~볼게요", "~주세요"처럼 같은 높임말 설명 종결이 이어지면 기계적인 선생님 말투가 됩니다. 설명자/가이드 말만 이어 붙였을 때 같은 어미 계열이 3번 이상 반복되면 다시 쓰세요.
 - 반말 캐릭터면 반말 안에서도 "~야", "~거든", "~지", "~잖아", "~거야", 짧은 감탄/명사형 정리를 섞고, 존댓말 캐릭터면 존댓말 안에서도 질문/관찰/정리/리액션의 끝맺음을 섞으세요. 한 가지 말끝으로 통일하지 마세요.
+- 한 캐릭터가 같은 원고 안에서 존댓말과 반말을 번갈아 쓰면 실패입니다. 어미 변주는 반드시 그 캐릭터의 고정 말투 안에서만 하세요.
 - 설명자/가이드 말만 이어 붙여 읽었을 때 말풍선으로 쪼갠 설명문 목록처럼 들리면, 생활감 있는 질문/관찰에서 시작하는 설명 대화로 다시 쓰세요.`
       : `- Learning dialogue must not sound like a translated textbook, instruction manual, slide script, or step list.
 - Open from a familiar everyday question, observation, or small problem instead of "Today we will learn about...".
@@ -4446,7 +4022,7 @@ ${params.script_text}`;
   let outlineSection = "";
 
   // For "script" input, skip outline if the user already structured the content
-  const needsOutline = targetPageCount > 1 && params.story_input_type !== "script";
+  const needsOutline = params.use_story_outline !== false && targetPageCount > 1 && params.story_input_type !== "script";
 
   if (needsOutline) {
     try {
@@ -4585,6 +4161,7 @@ ${isLearningComic && !storyAntiEducationGuardEnabled ? `- 학습만화 포맷에
       character_consistency_mode: characterConsistencyMode,
       creation_type: "story",
       story_input_type: params.story_input_type,
+      story_adaptation_mode: params.story_adaptation_mode || (params.use_story_outline === false ? "direct" : "analyzed"),
       story_genre: genre,
       pacing: pacing,
       story_anti_education_guard: storyAntiEducationGuardEnabled
@@ -4681,5 +4258,24 @@ export const generatePaperPlan = async (params: {
     }
   });
 
-  return overwriteLastPageWithPaperSummary(basePlan, brief);
+  return {
+    ...basePlan,
+    series_spec: {
+      ...basePlan.series_spec,
+      constraints: {
+        ...basePlan.series_spec.constraints,
+        creation_type: "paper",
+        paper_mode_track: brief.paper_mode_track
+      }
+    },
+    plan_meta: {
+      ...(basePlan.plan_meta || {}),
+      rationale_short: `[논문 만화] ${brief.paper_title || topic}`,
+      paper_brief: {
+        paper_title: brief.paper_title,
+        paper_mode_track: brief.paper_mode_track,
+        source_cues: brief.source_cues
+      }
+    }
+  };
 };

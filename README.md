@@ -23,6 +23,8 @@ cp .env.example .env.local
 npx @openai/codex login
 # 생성 경로는 Codex OAuth 전용입니다. 별도 API 키는 사용하지 않습니다.
 # (선택) 페이지 수 상한을 늘리려면 VITE_MAX_PAGE_COUNT / LOCAL_API_MAX_PAGE_COUNT를 조정하세요. (기본 12)
+# 프로젝트 보관함은 기본적으로 ./local-project-archive/projects.json 로컬 파일에 저장됩니다.
+# 저장 위치를 바꾸려면 LOCAL_PROJECT_ARCHIVE_PATH=/absolute/path/projects.json 을 설정하세요.
 ```
 
 실행:
