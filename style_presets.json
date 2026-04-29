@@ -144,7 +144,7 @@
     "preview_hint": "교과서 삽화 같은 안정감. 과학/역사/상식 계열 무난."
   },
   {
-    "id": "anime_theatrical_fantasy_art",
+    "id": "ghibli_fantasy_art",
     "category": "Anime",
     "label": "일본 극장판 · 회화 판타지",
     "render_mode": "illustration",
@@ -459,7 +459,7 @@
     "preview_hint": "깊은 바닷속의 신비. 해양 생물/환경/지구 과학."
   },
   {
-    "id": "photoreal_instant_film",
+    "id": "photoreal_polaroid_instant",
     "category": "Realism",
     "label": "실사 · 즉석 필름",
     "render_mode": "photoreal",

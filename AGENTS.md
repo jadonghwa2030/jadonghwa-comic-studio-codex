@@ -42,9 +42,9 @@ When a user asks to set up or run this repo on a new machine, prefer this flow:
 4. Run `npm install` if dependencies are missing.
 5. Ask the user to run `npx @openai/codex login` if Codex OAuth is not available.
 6. Run `npm run dev`.
-7. Verify the app at `http://localhost:3000`.
+7. Verify the app at the frontend URL printed by Vite (default: `http://localhost:3000`; if `3000` is busy, Vite may choose another localhost port).
 8. Verify backend health at `http://127.0.0.1:8787/api/health`.
-9. Report the frontend URL, backend health result, and any missing configuration.
+9. Report the actual frontend URL, backend health result, and any missing configuration.
 
 Do not commit or expose `.env.local`, local generated outputs, user-uploaded papers, exported ZIPs, or `local-project-archive/`.
 

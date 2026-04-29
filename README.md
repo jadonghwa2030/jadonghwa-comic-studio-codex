@@ -45,11 +45,15 @@ Run the app:
 npm run dev
 ```
 
-Open:
+Open the frontend URL printed by Vite.
+
+Usually it is:
 
 ```txt
 http://localhost:3000
 ```
+
+If port `3000` is already in use, Vite may move to another localhost port such as `3001`. In that case, use the URL shown in the terminal.
 
 Check backend health:
 
@@ -68,7 +72,7 @@ If you cloned this repository and want Codex to set it up, open the repository i
 먼저 AGENTS.md와 README.md를 읽고, 앱 코드는 바꾸지 말고 세팅 상태만 확인해줘.
 npm run setup, npm install, npx @openai/codex login 필요 여부, npm run dev 순서로 진행해줘.
 secret이나 계정 정보는 직접 만들거나 추측하지 말고 나한테 물어봐.
-마지막에는 localhost URL과 /api/health 상태를 알려줘.
+마지막에는 실제 frontend URL과 /api/health 상태를 알려줘.
 ```
 
 Codex should not invent secrets or commit local generated files. If generation fails, it should first check `.env.local`, the Codex login state, `http://127.0.0.1:8787/api/health`, and the terminal logs from the local backend.
@@ -89,6 +93,8 @@ Important `.env.example` values:
 - `CODEX_IMAGE_MODEL=gpt-5.4-mini`
 - `VITE_MAX_PAGE_COUNT=12`
 - `LOCAL_API_MAX_PAGE_COUNT=12`
+
+The frontend reads the active Codex image model from `/api/health`, so `CODEX_IMAGE_MODEL` also affects normal in-app page generation.
 
 These are local example values copied by `npm run setup` when `.env.local` is missing. Runtime code also has internal fallbacks, so treat `.env.example` as the editable local configuration surface.
 

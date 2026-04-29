@@ -90,7 +90,7 @@ const I2V_TEMPLATE_BY_RATIO: Record<I2VAspectRatio, string> = {
 const IMAGE_SIZE_OPTIONS: ImageSize[] = ["1K", "2K", "4K"];
 const DEFAULT_IMAGE_PROVIDER: ImageProvider = "codex";
 const DEFAULT_CODEX_IMAGE_QUALITY: CodexImageQuality = "medium";
-const DEFAULT_CODEX_IMAGE_MODEL = "gpt-5.5";
+const FALLBACK_CODEX_IMAGE_MODEL = "gpt-5.5";
 const DEFAULT_LAYOUT_VARIETY: LayoutVariety = "high";
 const LEARNING_QUESTION_TYPE: QuestionType = "explain";
 const LEARNING_COMIC_MODE: ComicMode = "learning";
@@ -125,7 +125,7 @@ interface HealthResponse {
 }
 
 const normalizeCodexImageModel = (model?: string): string =>
-  String(model || "").trim() || DEFAULT_CODEX_IMAGE_MODEL;
+  String(model || "").trim() || FALLBACK_CODEX_IMAGE_MODEL;
 
 const deriveTopicFromMaterial = (material: string, fallback: string): string => {
   const firstLine = material
@@ -146,18 +146,21 @@ const getCodexImageModelLabel = (model?: string): string => {
 
 const buildImageEngineKey = (
   provider: ImageProvider,
+  codexImageModel: string,
   codexImageQuality: CodexImageQuality
 ): string =>
-  `codex:${DEFAULT_CODEX_IMAGE_MODEL}:${codexImageQuality}`;
+  `codex:${normalizeCodexImageModel(codexImageModel)}:${codexImageQuality}`;
 
 const getImageEngineLabel = (
   provider: ImageProvider,
+  codexImageModel: string,
   codexImageQuality: CodexImageQuality
 ): string =>
-  `${getCodexImageModelLabel()} (${codexImageQuality})`;
+  `${getCodexImageModelLabel(codexImageModel)} (${codexImageQuality})`;
 
 const getImageEngineChipLabel = (
   provider: ImageProvider,
+  codexImageModel: string,
   codexImageQuality: CodexImageQuality
 ): string =>
   `Codex ${codexImageQuality}`;
@@ -166,7 +169,7 @@ const getImageEngineChipLabelFromKey = (key: string | null | undefined): string 
   const normalized = String(key || "").trim();
   if (!normalized) return "";
   if (normalized.startsWith("codex:")) {
-    const [, model = DEFAULT_CODEX_IMAGE_MODEL, quality = "medium"] = normalized.split(":");
+    const [, model = FALLBACK_CODEX_IMAGE_MODEL, quality = "medium"] = normalized.split(":");
     return `${getCodexImageModelLabel(model).replace(/^Codex\s+/, "")} ${quality}`;
   }
   return normalized;
@@ -1145,6 +1148,7 @@ const App: React.FC = () => {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(getInitialUiLanguage);
   const [topic, setTopic] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [codexImageModel, setCodexImageModel] = useState(FALLBACK_CODEX_IMAGE_MODEL);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [geminiReasoningEffort, setGeminiReasoningEffort] = useState<GeminiReasoningEffort>("medium");
   const [productionMode, setProductionMode] = useState<"single" | "new_longform" | "longform">("single");
@@ -1431,7 +1435,8 @@ const App: React.FC = () => {
     const init = async () => {
       let localApiAvailable = false;
       try {
-        await getJson<HealthResponse>("/api/health");
+        const health = await getJson<HealthResponse>("/api/health");
+        setCodexImageModel(normalizeCodexImageModel(health.codex_image_model));
         localApiAvailable = true;
       } catch (e) {
         console.warn("Local API health check failed. Is the backend running?", e);
@@ -3974,7 +3979,8 @@ const App: React.FC = () => {
       const pageImageUrl = await generateFullPageImage(resolvedSeriesSpec, page, imageSize, comicMode, {
         styleConsistencyImage: compressedStyleConsistencyImage,
         imageProvider,
-        codexImageQuality
+        codexImageQuality,
+        codexImageModel
       });
       if (generationRunIdRef.current !== runId) return false;
       setPageResults((prev) => upsertGenerationResult(prev, {
@@ -3985,7 +3991,7 @@ const App: React.FC = () => {
       setPageRenderedImageSize((prev) => ({ ...prev, [pageIndex]: imageSize }));
       setPageRenderedEngineKey((prev) => ({
         ...prev,
-        [pageIndex]: buildImageEngineKey(imageProvider, codexImageQuality)
+        [pageIndex]: buildImageEngineKey(imageProvider, codexImageModel, codexImageQuality)
       }));
       setSystemError(null);
       setStatus(AppStatus.READY_TO_GENERATE);
@@ -4028,7 +4034,7 @@ const App: React.FC = () => {
       const ok = await generatePage(nextPage.page.index);
       if (!ok) setAutoGeneratePages(false);
     })();
-  }, [autoGeneratePages, imageProvider, imageSize, isProcessingPageIndex, codexImageQuality, pageResults, regenerateAllPages, seriesPlan, status]);
+  }, [autoGeneratePages, codexImageModel, imageProvider, imageSize, isProcessingPageIndex, codexImageQuality, pageResults, regenerateAllPages, seriesPlan, status]);
 
   useEffect(() => {
     if (!regenerateAllPages) return;
@@ -4054,7 +4060,7 @@ const App: React.FC = () => {
       }
       setRegenerateCursor((prev) => prev + 1);
     })();
-  }, [autoGeneratePages, imageProvider, imageSize, isProcessingPageIndex, codexImageQuality, regenerateAllPages, regenerateCursor, seriesPlan, status]);
+  }, [autoGeneratePages, codexImageModel, imageProvider, imageSize, isProcessingPageIndex, codexImageQuality, regenerateAllPages, regenerateCursor, seriesPlan, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4157,7 +4163,7 @@ const App: React.FC = () => {
         imageSize,
         comicMode,
         codexImageQuality,
-        codexImageModel: DEFAULT_CODEX_IMAGE_MODEL,
+        codexImageModel,
         pageStyleOverrides,
         pageResults,
         useCrossPageStyleConsistency
@@ -4197,8 +4203,8 @@ const App: React.FC = () => {
   const unitLabel = uiLanguage === "ko" ? currentFormatConfig.unitLabelKo : currentFormatConfig.unitLabel;
   const previewAspectClass = getPreviewAspectClass(publicationFormat, i2vAspectRatio);
   const showNarrativeText = outputReaderMode === "visual_plus_script";
-  const currentImageEngineKey = buildImageEngineKey(imageProvider, codexImageQuality);
-  const currentImageEngineLabel = getImageEngineLabel(imageProvider, codexImageQuality);
+  const currentImageEngineKey = buildImageEngineKey(imageProvider, codexImageModel, codexImageQuality);
+  const currentImageEngineLabel = getImageEngineLabel(imageProvider, codexImageModel, codexImageQuality);
   const imageSizeSummary = imageSize === "1K"
     ? ui("1K 빠름", "1K fast")
     : imageSize === "2K"
