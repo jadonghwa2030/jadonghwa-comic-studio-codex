@@ -171,6 +171,12 @@ const normalizeReasoningEffort = (value) => {
   return ["low", "medium", "high"].includes(requested) ? requested : "medium";
 };
 
+const normalizeMaxOutputTokens = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.min(100_000, Math.floor(parsed));
+};
+
 const validateCodexImageSize = (size) => {
   const match = /^(\d+)x(\d+)$/.exec(size);
   if (!match) return "Expected WIDTHxHEIGHT.";
@@ -552,6 +558,9 @@ const generateCodexContent = async (request) => {
       request?.config?.reasoning_effort ||
       request?.config?.thinkingConfig?.reasoningEffort
   );
+  const maxOutputTokens = normalizeMaxOutputTokens(
+    request?.config?.maxOutputTokens ?? request?.config?.max_output_tokens
+  );
   const userContent = buildCodexUserContent(request);
   const body = {
     model,
@@ -574,6 +583,7 @@ const generateCodexContent = async (request) => {
           }
         }
       : { text: { format: { type: "json_object" } } }),
+    ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
     reasoning: { effort: reasoningEffort },
     ...(enableSearch ? { tools: [{ type: "web_search" }] } : {})
   };

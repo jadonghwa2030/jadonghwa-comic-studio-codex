@@ -2,8 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw, Save, Wand2, X, CheckCircle2 } from "lucide-react";
 import type { SeriesSpec, StylePreset } from "../types";
 import { selectStyle } from "../services/styleService";
+import { readImageFileAsCompressedDataUrl } from "../services/imageDataUrl";
 
 type ApplyScope = "page" | "all";
+const STYLE_REFERENCE_MAX_EDGE = 1024;
+const STYLE_REFERENCE_MAX_LENGTH = 300_000;
+const STYLE_REFERENCE_JPEG_QUALITY = 0.82;
 
 type Props = {
   open: boolean;
@@ -85,6 +89,18 @@ export const PageStyleEditorModal: React.FC<Props> = ({
   const filteredPresets = useMemo(() => {
     return presets.filter((p) => (p.category || "Uncategorized") === selectedCategory);
   }, [presets, selectedCategory]);
+
+  const readStyleReferenceFile = async (file: File): Promise<string> => {
+    const dataUrl = await readImageFileAsCompressedDataUrl(file, {
+      maxEdge: STYLE_REFERENCE_MAX_EDGE,
+      maxLength: STYLE_REFERENCE_MAX_LENGTH,
+      quality: STYLE_REFERENCE_JPEG_QUALITY,
+    });
+    if (dataUrl.startsWith("data:") && dataUrl.length > STYLE_REFERENCE_MAX_LENGTH) {
+      throw new Error(ui("스타일 이미지를 저장 가능한 크기로 줄이지 못했어. 더 작은 PNG/JPG 이미지를 올려줘.", "Could not shrink the style image enough to save. Upload a smaller PNG/JPG image."));
+    }
+    return dataUrl;
+  };
 
   useEffect(() => {
     if (filteredPresets.length === 0) return;
@@ -248,10 +264,12 @@ export const PageStyleEditorModal: React.FC<Props> = ({
                     return;
                   }
 
-                  const r = new FileReader();
-                  r.onerror = () => setStyleReferenceError(ui("이미지를 불러오지 못했어.", "Could not load the image."));
-                  r.onload = (ev) => setStyleReferenceImage(ev.target?.result as string);
-                  r.readAsDataURL(f);
+                  void readStyleReferenceFile(f)
+                    .then((dataUrl) => setStyleReferenceImage(dataUrl))
+                    .catch((error: any) => {
+                      setStyleReferenceError(error?.message || ui("이미지를 불러오지 못했어.", "Could not load the image."));
+                      setStyleReferenceImage(null);
+                    });
                   e.currentTarget.value = "";
                 }}
               />

@@ -670,6 +670,22 @@ export const buildFullPageImageRequest = (
 
   const castProtagonists = cast.filter((c) => c?.role === "protagonist");
   const castSupporting = cast.filter((c) => c?.role === "supporting");
+  const normalizeSpeakerPrefix = (value: string): string =>
+    value.replace(/\s+/g, " ").trim().toLowerCase();
+  const knownSpeakerPrefixes = new Set(
+    [
+      "주인공",
+      "나레이션",
+      "내레이션",
+      "해설자",
+      "캐릭터",
+      "protagonist",
+      "narrator",
+      "guide",
+      "character",
+      ...cast.map((c) => String(c?.name || "").trim()).filter(Boolean)
+    ].map(normalizeSpeakerPrefix)
+  );
 
   /** scene 필드에서 인용된 대사 텍스트와 인용 동사구를 제거하여 Gemini의 이중 렌더링 방지 */
   const stripDialogueFromScene = (scene: string): string => {
@@ -700,10 +716,20 @@ export const buildFullPageImageRequest = (
     return "SPEECH BUBBLE";
   };
 
-  const buildTextCueLines = (dialogues: string[]) => dialogues.map(d => {
-    const noSpeaker = d.replace(/^(주인공|나레이션|해설자|캐릭터|[\w\s가-힣]+)\s*[:：]\s*/i, "").trim();
-    return parseDialogueTag(noSpeaker);
-  });
+  const stripKnownSpeakerPrefix = (raw: string): string => {
+    const trimmed = String(raw || "").trim();
+    const tagMatch = trimmed.match(/^(\[(?:thought|narration)\])\s*(.*)$/i);
+    const tag = tagMatch?.[1] || "";
+    const body = tagMatch ? tagMatch[2].trim() : trimmed;
+    const speakerMatch = body.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
+    if (!speakerMatch) return trimmed;
+    const speaker = normalizeSpeakerPrefix(speakerMatch[1]);
+    if (!knownSpeakerPrefixes.has(speaker)) return trimmed;
+    const text = speakerMatch[2].trim();
+    return tag ? `${tag}${text}` : text;
+  };
+
+  const buildTextCueLines = (dialogues: string[]) => dialogues.map(d => parseDialogueTag(stripKnownSpeakerPrefix(d)));
 
   // 패널별 대사 및 장면 정보 요약
   const panelDescriptions = page.panels.map(p => {

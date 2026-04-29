@@ -11,6 +11,7 @@ import { analyzePaperPdf, analyzePaperUrl } from './services/paperService';
 import { generateGeminiResearchPack } from './services/geminiResearchService';
 import { suggestNarrativePageCounts } from './services/pageSuggestionService';
 import { getJson } from './services/localApi';
+import { compressImageDataUrl, readImageFileAsCompressedDataUrl } from './services/imageDataUrl';
 import { DELIVERY_STYLE_PRESETS, resolveDeliveryStyleSpec } from './services/deliveryStyles';
 import { downloadAsZip, downloadFilesAsZip } from './services/postprocessor';
 import { composeWebtoonEpisodeSegments } from './services/webtoonEpisodeService';
@@ -122,6 +123,10 @@ interface HealthResponse {
   codex_oauth_autostart?: boolean;
   codex_oauth_port?: number;
   codex_image_model?: string;
+}
+
+interface OAuthStatusResponse {
+  status?: string;
 }
 
 const normalizeCodexImageModel = (model?: string): string =>
@@ -1148,6 +1153,8 @@ const App: React.FC = () => {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(getInitialUiLanguage);
   const [topic, setTopic] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [localApiAvailable, setLocalApiAvailable] = useState(false);
+  const [localStudioIssue, setLocalStudioIssue] = useState<"api" | "oauth" | null>(null);
   const [codexImageModel, setCodexImageModel] = useState(FALLBACK_CODEX_IMAGE_MODEL);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [geminiReasoningEffort, setGeminiReasoningEffort] = useState<GeminiReasoningEffort>("medium");
@@ -1354,7 +1361,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     persistSavedComicProjects(savedProjects);
-    if (!hasApiKey || !localArchiveLoadedRef.current) return;
+    if (!localApiAvailable || !localArchiveLoadedRef.current) return;
 
     if (localArchiveSaveTimerRef.current) {
       window.clearTimeout(localArchiveSaveTimerRef.current);
@@ -1375,10 +1382,10 @@ const App: React.FC = () => {
         localArchiveSaveTimerRef.current = null;
       }
     };
-  }, [hasApiKey, savedProjects, uiLanguage]);
+  }, [localApiAvailable, savedProjects, uiLanguage]);
 
   useEffect(() => {
-    if (!hasApiKey || localArchiveLoadedRef.current) return;
+    if (!localApiAvailable || localArchiveLoadedRef.current) return;
     let cancelled = false;
 
     void loadSavedComicProjectsFromLocalArchive()
@@ -1398,7 +1405,7 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [hasApiKey, uiLanguage]);
+  }, [localApiAvailable, uiLanguage]);
 
   useEffect(() => {
     if (!selectedCastPresetId && castPresets.length > 0) {
@@ -1433,15 +1440,28 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      let localApiAvailable = false;
+      let apiAvailable = false;
+      let oauthReady = false;
       try {
         const health = await getJson<HealthResponse>("/api/health");
         setCodexImageModel(normalizeCodexImageModel(health.codex_image_model));
-        localApiAvailable = true;
+        apiAvailable = true;
       } catch (e) {
         console.warn("Local API health check failed. Is the backend running?", e);
       }
-      setHasApiKey(localApiAvailable);
+      setLocalApiAvailable(apiAvailable);
+
+      if (apiAvailable) {
+        try {
+          const oauth = await getJson<OAuthStatusResponse>("/api/oauth/status");
+          oauthReady = oauth.status === "ready";
+        } catch (e) {
+          console.warn("Codex OAuth status check failed. Is Codex logged in?", e);
+        }
+      }
+
+      setHasApiKey(apiAvailable && oauthReady);
+      setLocalStudioIssue(!apiAvailable ? "api" : oauthReady ? null : "oauth");
 
       const styles = await getStylePresets();
       setStylePresets(styles);
@@ -1454,7 +1474,7 @@ const App: React.FC = () => {
         console.error("Layout templates fetch failed", e);
       }
 
-      if (localApiAvailable) {
+      if (apiAvailable && oauthReady) {
         setStatus(AppStatus.TOPIC_INPUT);
       }
     };
@@ -2083,74 +2103,6 @@ const App: React.FC = () => {
     });
   };
 
-  const readFileAsDataUrlRaw = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
-      r.onload = () => resolve(String(r.result || ""));
-      r.readAsDataURL(file);
-    });
-  };
-
-  const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
-      img.src = dataUrl;
-    });
-  };
-
-  const compressImageDataUrl = async (
-    dataUrl: string,
-    options: { maxEdge: number; maxLength: number; quality: number }
-  ): Promise<string> => {
-    if (!isDataUrl(dataUrl)) return dataUrl;
-    if (!/^data:image\//i.test(dataUrl)) return dataUrl;
-    if (/^data:image\/(gif|svg\+xml)/i.test(dataUrl)) return dataUrl;
-    if (dataUrl.length <= options.maxLength) return dataUrl;
-
-    try {
-      const img = await loadImageFromDataUrl(dataUrl);
-      const sourceW = img.naturalWidth || img.width;
-      const sourceH = img.naturalHeight || img.height;
-      if (!sourceW || !sourceH) return dataUrl;
-
-      const renderJpeg = (w: number, h: number, quality: number): string | null => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return null;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        return canvas.toDataURL("image/jpeg", quality);
-      };
-
-      const initialScale = Math.min(1, options.maxEdge / Math.max(sourceW, sourceH));
-      let targetW = Math.max(1, Math.round(sourceW * initialScale));
-      let targetH = Math.max(1, Math.round(sourceH * initialScale));
-      let quality = options.quality;
-      let best = dataUrl;
-
-      for (let pass = 0; pass < 5; pass += 1) {
-        const compressed = renderJpeg(targetW, targetH, quality);
-        if (!compressed) break;
-        if (compressed.length < best.length) best = compressed;
-        if (compressed.length <= options.maxLength) return compressed;
-
-        quality = Math.max(0.55, quality - 0.12);
-        targetW = Math.max(1, Math.round(targetW * 0.82));
-        targetH = Math.max(1, Math.round(targetH * 0.82));
-      }
-
-      return best.length < dataUrl.length ? best : dataUrl;
-    } catch {
-      return dataUrl;
-    }
-  };
-
   const compressReferenceDataUrl = async (dataUrl: string): Promise<string> => {
     return compressImageDataUrl(dataUrl, {
       maxEdge: REFERENCE_IMAGE_MAX_EDGE,
@@ -2160,8 +2112,19 @@ const App: React.FC = () => {
   };
 
   const readFileAsDataUrl = async (file: File): Promise<string> => {
-    const raw = await readFileAsDataUrlRaw(file);
-    return compressReferenceDataUrl(raw);
+    return readImageFileAsCompressedDataUrl(file, {
+      maxEdge: REFERENCE_IMAGE_MAX_EDGE,
+      maxLength: MAX_PERSISTABLE_DATA_URL_LENGTH,
+      quality: REFERENCE_IMAGE_JPEG_QUALITY,
+    });
+  };
+
+  const readStyleReferenceFileAsDataUrl = async (file: File): Promise<string> => {
+    const dataUrl = await readFileAsDataUrl(file);
+    if (isDataUrl(dataUrl) && dataUrl.length > MAX_PERSISTABLE_DATA_URL_LENGTH) {
+      throw new Error(ui("스타일 이미지를 저장 가능한 크기로 줄이지 못했어. 더 작은 PNG/JPG 이미지를 올려줘.", "Could not shrink the style image enough to save. Upload a smaller PNG/JPG image."));
+    }
+    return dataUrl;
   };
 
   const MAX_REF_IMAGES_PER_CHARACTER = 4;
@@ -3558,23 +3521,14 @@ const App: React.FC = () => {
     }
     generationRunIdRef.current += 1;
     const runId = generationRunIdRef.current;
+    const previousStatus = status;
+    const hadExistingPlan = Boolean(seriesPlan);
     try {
       setSystemError(null);
       setAutoGeneratePages(false);
       setRegenerateAllPages(false);
       setRegenerateCursor(1);
       setIsProcessingPageIndex(null);
-      setPageResults([]);
-      setPageErrors({});
-      setWebtoonEpisodeResult(null);
-      setIsBuildingWebtoonEpisode(false);
-      setPageRenderedAt({});
-      setPageRenderedImageSize({});
-      setPageRenderedEngineKey({});
-      setPageScriptEditedAt({});
-      setPageStyleOverrides({});
-      setPageStyleEditedAt({});
-      setGlobalStyleEditedAt(0);
       setPageScriptEditorOpen(false);
       setPageScriptDraft(null);
       setPageEditActionOpen(false);
@@ -3759,17 +3713,29 @@ const App: React.FC = () => {
       }
       if (generationRunIdRef.current !== runId) return;
       setSeriesPlan(plan);
+      setPageResults([]);
+      setPageErrors({});
+      setWebtoonEpisodeResult(null);
+      setIsBuildingWebtoonEpisode(false);
+      setPageRenderedAt({});
+      setPageRenderedImageSize({});
+      setPageRenderedEngineKey({});
+      setPageScriptEditedAt({});
+      setPageStyleOverrides({});
+      setPageStyleEditedAt({});
+      setGlobalStyleEditedAt(0);
       setStatus(AppStatus.PLAN_REVIEW);
     } catch (e) {
       console.error(e);
       if (generationRunIdRef.current !== runId) return;
       setSystemError(toUserFacingError((e as any)?.message, ui("플랜 생성에 실패했어.", "Plan generation failed."), uiLanguage));
-      setStatus(AppStatus.ERROR);
+      setStatus(hadExistingPlan ? previousStatus : AppStatus.ERROR);
     }
   };
 
   const switchPlanLanguage = async (nextLanguage: Language) => {
     const currentPlanLanguage = seriesPlan?.series_spec?.series?.language;
+    const previousLanguage = language;
     if (!seriesPlan) {
       setLanguage(nextLanguage);
       return;
@@ -3787,13 +3753,6 @@ const App: React.FC = () => {
     setRegenerateAllPages(false);
     setRegenerateCursor(1);
     setIsProcessingPageIndex(null);
-    setPageResults([]);
-    setPageErrors({});
-    setWebtoonEpisodeResult(null);
-    setIsBuildingWebtoonEpisode(false);
-    setPageRenderedAt({});
-    setPageRenderedImageSize({});
-    setPageRenderedEngineKey({});
     setPageEditActionOpen(false);
     setPageEditTargetIndex(null);
     setPageStyleEditorOpen(false);
@@ -3815,13 +3774,22 @@ const App: React.FC = () => {
       });
       if (generationRunIdRef.current !== runId) return;
       setSeriesPlan((prev) => (prev ? { ...prev, series_spec: translated.series_spec, pages: translated.pages } : prev));
+      setPageResults([]);
+      setPageErrors({});
+      setWebtoonEpisodeResult(null);
+      setIsBuildingWebtoonEpisode(false);
+      setPageRenderedAt({});
+      setPageRenderedImageSize({});
+      setPageRenderedEngineKey({});
       setBusyPhase("planning");
       setStatus(returnStatus);
     } catch (e) {
       console.error(e);
       if (generationRunIdRef.current !== runId) return;
+      setLanguage(currentPlanLanguage || previousLanguage);
       setSystemError(toUserFacingError((e as any)?.message, ui("언어 변환에 실패했어.", "Language conversion failed."), uiLanguage));
-      setStatus(AppStatus.ERROR);
+      setBusyPhase("planning");
+      setStatus(returnStatus);
     }
   };
 
@@ -4262,13 +4230,21 @@ const App: React.FC = () => {
   const selectedStylePresetForDisplay = stylePresets.find((p) => p.id === selectedPresetId);
 
   if (!hasApiKey) {
+    const isOauthIssue = localStudioIssue === "oauth";
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
         <div className="bg-white border-4 border-black p-8 comic-shadow max-w-md w-full">
           <Key className="w-16 h-16 mx-auto mb-4 text-blue-600" />
-          <h1 className="text-2xl font-black mb-4 uppercase">{ui("로컬 스튜디오 오프라인", "Local Studio Offline")}</h1>
+          <h1 className="text-2xl font-black mb-4 uppercase">{isOauthIssue ? ui("Codex 로그인 필요", "Codex Login Required") : ui("로컬 스튜디오 오프라인", "Local Studio Offline")}</h1>
           <p className="text-sm font-bold text-slate-500 mb-6">
-            {ui("로컬 서버가 필요해.", "Local server is required.")} <span className="font-black">npm run dev</span>{ui("로 실행하고, Codex 로그인이 안 되어 있으면 터미널에서", " should be running. If Codex is not logged in, run")} <span className="font-black">npx @openai/codex login</span>{ui("을 먼저 실행해줘.", " first.")}
+            {isOauthIssue
+              ? ui("로컬 API는 켜져 있는데 Codex OAuth가 아직 준비되지 않았어. 터미널에서", "The local API is running, but Codex OAuth is not ready. Run")
+              : ui("로컬 서버가 필요해.", "Local server is required.")}
+            {" "}
+            <span className="font-black">{isOauthIssue ? "npx @openai/codex login" : "npm run dev"}</span>
+            {isOauthIssue
+              ? ui("을 실행한 뒤 새로고침해줘.", " and refresh.")
+              : ui("로 실행하고, Codex 로그인이 안 되어 있으면 터미널에서 npx @openai/codex login을 먼저 실행해줘.", " should be running. If Codex is not logged in, run npx @openai/codex login first.")}
           </p>
         </div>
       </div>
@@ -5039,11 +5015,12 @@ const App: React.FC = () => {
                     return;
                   }
 
-                  const r = new FileReader();
-                  r.onerror = () => setStyleReferenceError(ui("이미지를 불러오지 못했어.", "Could not load the image."));
-                  r.onload = (ev) => setStyleReferenceImage(ev.target?.result as string);
-                  r.readAsDataURL(f);
-                  // Allow re-uploading the same file
+                  void readStyleReferenceFileAsDataUrl(f)
+                    .then((dataUrl) => setStyleReferenceImage(dataUrl))
+                    .catch((error: any) => {
+                      setStyleReferenceError(error?.message || ui("이미지를 불러오지 못했어.", "Could not load the image."));
+                      setStyleReferenceImage(null);
+                    });
                   e.currentTarget.value = "";
                 }}
               />
@@ -6513,35 +6490,36 @@ const App: React.FC = () => {
 
         {(status === AppStatus.READY_TO_GENERATE || status === AppStatus.GENERATING_PANELS) && (
           <div className="space-y-12 animate-fade-in">
-            <div className="bg-white border-4 border-black p-4 md:p-6 sticky top-4 md:top-6 z-50 comic-shadow">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <PreviousStepButton className="mb-2" />
-                  <p className="text-[10px] font-black uppercase text-blue-700 mb-1">
-                    {isI2VSelected ? ui("프레임 생성", "Frame Generation") : ui("이미지 생성", "Image Generation")}
-                  </p>
-                  <p className="text-lg md:text-2xl font-black italic tracking-tight truncate">{seriesPlan?.series_spec.series.title}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black text-slate-600">
-                    {seriesPlan && (
+            <div className="space-y-4">
+              <div className="bg-white border-4 border-black p-4 md:p-6 sticky top-4 md:top-6 z-50 comic-shadow">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <PreviousStepButton className="mb-2" />
+                    <p className="text-[10px] font-black uppercase text-blue-700 mb-1">
+                      {isI2VSelected ? ui("프레임 생성", "Frame Generation") : ui("이미지 생성", "Image Generation")}
+                    </p>
+                    <p className="text-lg md:text-2xl font-black italic tracking-tight truncate">{seriesPlan?.series_spec.series.title}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black text-slate-600">
+                      {seriesPlan && (
+                        <span className="border-2 border-black bg-slate-50 px-2 py-1">
+                          {ui("진행", "Progress")}: {generatedProgressLabel}
+                        </span>
+                      )}
                       <span className="border-2 border-black bg-slate-50 px-2 py-1">
-                        {ui("진행", "Progress")}: {generatedProgressLabel}
+                        {imageSizeSummary} · {imageQualitySummary}
                       </span>
-                    )}
-                    <span className="border-2 border-black bg-slate-50 px-2 py-1">
-                      {imageSizeSummary} · {imageQualitySummary}
-                    </span>
-                    <span className="border-2 border-black bg-slate-50 px-2 py-1">
-                      {readerModeSummary}
-                    </span>
-                    {failedUnitCount > 0 ? (
-                      <span className="border-2 border-red-500 bg-red-50 px-2 py-1 text-red-700">
-                        {failedUnitCount} {isI2VSelected ? ui("프레임 실패", "frame failed") : ui("페이지 실패", "page failed")}
+                      <span className="border-2 border-black bg-slate-50 px-2 py-1">
+                        {readerModeSummary}
                       </span>
-                    ) : null}
+                      {failedUnitCount > 0 ? (
+                        <span className="border-2 border-red-500 bg-red-50 px-2 py-1 text-red-700">
+                          {failedUnitCount} {isI2VSelected ? ui("프레임 실패", "frame failed") : ui("페이지 실패", "page failed")}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                   {nextPendingPage && (
                     <button
                       type="button"
@@ -6590,11 +6568,18 @@ const App: React.FC = () => {
                     <Settings2 size={14} />
                     {generationSettingsOpen ? ui("설정 접기", "Hide settings") : ui("생성 설정", "Generation settings")}
                   </button>
+                  </div>
                 </div>
+
               </div>
 
               {generationSettingsOpen && (
-                <div className="mt-5 border-t-2 border-black pt-5">
+                <div className="bg-white border-4 border-black p-4 md:p-6 comic-shadow">
+                  <div className="mb-5 border-b-2 border-black pb-4">
+                    <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-2">
+                      <Settings2 size={14} /> {ui("생성 설정", "Generation settings")}
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
                     {seriesPlan && (
                       <div className="border-2 border-black bg-slate-50 p-3">
@@ -6728,6 +6713,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
+
             </div>
 
             <div className="border-2 border-black bg-yellow-50 px-4 py-3 text-[10px] font-bold text-slate-600">
