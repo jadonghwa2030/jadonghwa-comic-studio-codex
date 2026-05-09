@@ -249,6 +249,7 @@ const sanitizePaperBrief = (value: unknown): PaperBrief | null => {
     method_summary: typeof raw.method_summary === "string" ? raw.method_summary : "",
     result_summary: typeof raw.result_summary === "string" ? raw.result_summary : "",
     limitations: toStrings(raw.limitations),
+    public_reception_notes: toStrings(raw.public_reception_notes),
     source_cues: toStrings(raw.source_cues),
     warnings: toStrings(raw.warnings),
     page_suggestions: {

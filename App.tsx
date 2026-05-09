@@ -5903,6 +5903,20 @@ const App: React.FC = () => {
                           </div>
                         )}
 
+                        {(paperBrief.public_reception_notes || []).length > 0 && (
+                          <div className="border-2 border-black bg-white p-3">
+                            <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("리뷰와 대중 반응", "Reviews & Public Reaction")}</p>
+                            <div className="space-y-1 text-[10px] font-bold text-slate-700">
+                              {paperBrief.public_reception_notes.slice(0, 4).map((item, index) => (
+                                <p key={index}>- {item}</p>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[10px] font-bold text-slate-500">
+                              {ui("마지막 페이지에서 '이런 반응도 있었다' 정도로만 써.", "Used only as a light final-page reception note.")}
+                            </p>
+                          </div>
+                        )}
+
                         {(paperBrief.warnings || []).length > 0 && (
                           <div className="border-2 border-yellow-400 bg-yellow-50 p-3">
                             <p className="text-[10px] font-black uppercase text-yellow-800 mb-1">{ui("경고", "Warnings")}</p>

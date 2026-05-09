@@ -1025,9 +1025,19 @@ const safeParseJson = (text: string) => {
   }
 };
 
-const buildPaperResearchPackNotes = (brief: PaperBrief): string =>
-  String(brief.explainer_story || "").trim() ||
-  "해설 원고 없음. 논문 본문을 바탕으로 먼저 읽히는 설명 서사를 구성하세요.";
+const buildPaperResearchPackNotes = (brief: PaperBrief): string => {
+  const story = String(brief.explainer_story || "").trim() ||
+    "해설 원고 없음. 논문 본문을 바탕으로 먼저 읽히는 설명 서사를 구성하세요.";
+  const receptionNotes = (brief.public_reception_notes || [])
+    .map((note) => String(note || "").trim())
+    .filter(Boolean);
+  if (receptionNotes.length === 0) return story;
+  return `${story}
+
+[마지막 에필로그 재료 - 리뷰와 대중 반응]
+아래 내용은 논문 결론이 아니라, 공개적으로 관찰된 반응을 "이런 반응이 있었다" 정도로 보여주는 재료입니다. 본문 설명에 섞어 단정하지 말고 마지막 반응 페이지에서만 가볍게 사용하세요.
+${receptionNotes.map((note) => `- ${note}`).join("\n")}`;
+};
 const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief): SeriesPlan => {
   if (!Array.isArray(plan.pages) || plan.pages.length === 0) return plan;
 
@@ -1062,8 +1072,63 @@ const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief):
   const finalMeaning =
     brief.one_line_takeaway ||
     "이 논문은 그 틈을 이해하는 새 단서를 남겼어요.";
+  const receptionNotes = (brief.public_reception_notes || [])
+    .map((note) => String(note || "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const hasReceptionNotes = receptionNotes.length > 0;
+  const receptionLine = receptionNotes[0] || "";
+  const communityLine = receptionNotes[1] || receptionNotes[0] || "";
+  const cautionLine = receptionNotes.length > 2
+    ? receptionNotes.slice(2).join(" / ")
+    : "반응은 논문 자체의 결론이 아니라, 논문 밖에서 나온 해석으로 분리해서 읽어야 해요.";
 
   const summaryBlocks = (() => {
+    if (hasReceptionNotes) {
+      if (panelCount <= 1) {
+        return [{
+          title: "논문 밖의 반응",
+          scene: "A closing epilogue panel showing public review snippets and community discussion cards around the paper, clearly separated from the paper itself.",
+          dialogue: `[narration]논문 밖에서는 이런 반응도 있었어요.\n[narration]${receptionLine}\n[narration]다만 반응은 논문의 결론과 구분해서 읽어야 해요.`
+        }];
+      }
+      if (panelCount === 2) {
+        return [
+          {
+            title: "논문이 남긴 것",
+            scene: "A reflective recap panel showing the paper's actual contribution before moving to public reception.",
+            dialogue: `[narration]논문이 남긴 단서는 여기까지예요.\n[narration]${finalMeaning}\n[narration]다만 ${limitationLine}`
+          },
+          {
+            title: "밖에서 나온 반응",
+            scene: "A separated epilogue panel with review notes, social posts, and discussion cards labeled as reactions rather than facts.",
+            dialogue: `[narration]그리고 밖에서는 이런 반응이 있었어요.\n[narration]${receptionLine}\n[narration]이건 평가의 정답이 아니라 반응의 기록이에요.`
+          }
+        ];
+      }
+      return [
+        {
+          title: "논문이 말한 것",
+          scene: "A calm recap panel showing the paper's actual result and contribution as the ending of the explanation.",
+          dialogue: `[narration]논문 자체가 말한 건 여기까지예요.\n[narration]${finalMeaning}`
+        },
+        {
+          title: "리뷰 쪽 반응",
+          scene: "A public-reception epilogue panel showing expert review notes or formal discussion cards, visually marked as outside reactions.",
+          dialogue: `[narration]리뷰나 전문가 쪽에서는 이런 점을 봤어요.\n[narration]${receptionLine}`
+        },
+        {
+          title: "대중 쪽 반응",
+          scene: "A community-reaction epilogue panel showing social discussion bubbles, forum cards, and cautious question marks without presenting them as proof.",
+          dialogue: `[narration]커뮤니티에서는 이런 반응도 나왔고요.\n[narration]${communityLine}`
+        },
+        {
+          title: "구분해서 읽기",
+          scene: "A final caution panel separating the paper document on one side from reaction cards on the other.",
+          dialogue: `[narration]그래서 읽을 때는 둘을 나눠야 해요.\n[narration]논문이 확인한 것.\n[narration]그리고 사람들이 그렇게 받아들인 것.\n[narration]${cautionLine}`
+        }
+      ].slice(0, panelCount);
+    }
     if (panelCount <= 1) {
       return [{
         title: "남긴 의미",
@@ -1140,7 +1205,7 @@ const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief):
     return blocks.slice(0, panelCount);
   })();
 
-  lastPage.page.chapter_title = "논문 요약";
+  lastPage.page.chapter_title = hasReceptionNotes ? "리뷰와 반응" : "논문 요약";
   lastPage.panels = lastPage.panels.map((panel, index) => {
     const block = summaryBlocks[index] || summaryBlocks[summaryBlocks.length - 1];
     const dialogueLines = String(block.dialogue || "")
@@ -1151,7 +1216,9 @@ const overwriteLastPageWithPaperSummary = (plan: SeriesPlan, brief: PaperBrief):
     return {
       ...panel,
       scene: block.scene,
-      acting: "The guide character calmly points at recap visuals, notes, and simplified figure motifs.",
+      acting: hasReceptionNotes
+        ? "The guide character calmly separates the paper's claims from public reaction notes, keeping the tone observational."
+        : "The guide character calmly points at recap visuals, notes, and simplified figure motifs.",
       dialogues: dialogueLines,
       camera: index === 0 ? "medium shot" : "close-up infographic composition",
       mood: index === summaryBlocks.length - 1 ? "clear and reflective" : "focused and informative"
@@ -4258,7 +4325,7 @@ export const generatePaperPlan = async (params: {
     }
   });
 
-  return {
+  const enrichedPlan: SeriesPlan = {
     ...basePlan,
     series_spec: {
       ...basePlan.series_spec,
@@ -4274,8 +4341,10 @@ export const generatePaperPlan = async (params: {
       paper_brief: {
         paper_title: brief.paper_title,
         paper_mode_track: brief.paper_mode_track,
+        public_reception_notes: brief.public_reception_notes,
         source_cues: brief.source_cues
       }
     }
   };
+  return overwriteLastPageWithPaperSummary(enrichedPlan, brief);
 };

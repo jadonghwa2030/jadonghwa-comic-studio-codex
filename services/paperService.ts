@@ -52,17 +52,26 @@ explainer_story는 이 분석의 가장 중요한 산출물입니다.
 비유/세계관을 쓰되, 논문의 실제 주제와 연결되는 장면이어야 합니다. 독자가 "재미는 있는데 그래서 무슨 논문이지?"라고 느끼면 실패입니다.
 초반부터 논문 제목, 발표일, 벤치마크, 모델명, 점수표를 해설자처럼 몰아넣지 마세요. 그런 정보는 이야기가 충분히 깔린 뒤 꼭 필요할 때만 자연스럽게 등장시키세요.`;
 
+const paperReceptionGuidance = `public_reception_notes는 만화 마지막에 붙일 "리뷰와 대중 반응" 에필로그 재료입니다.
+- 논문 자체의 결론처럼 쓰지 말고, "이런 반응이 있었다" 정도의 관찰로만 쓰세요.
+- 공식 리뷰/학회 토론/저자 코멘트/뉴스레터/블로그/X/Reddit 등 공개적으로 확인 가능한 반응만 사용하세요.
+- 직접 인용문을 길게 옮기지 말고, 짧은 요약으로 정리하세요.
+- 반응 출처의 성격을 함께 적으세요. 예: "학계/전문가 쪽에서는 ...", "커뮤니티에서는 ..."
+- 확인 가능한 외부 반응이 부족하면 억지로 만들지 말고 빈 배열로 두고 warnings에 남기세요.`;
+
 const paperBriefResponseJsonSchema = {
   type: "object",
   properties: {
     paper_title: { type: "string" },
     explainer_story: { type: "string" },
+    public_reception_notes: { type: "array", items: { type: "string" } },
     source_cues: { type: "array", items: { type: "string" } },
     warnings: { type: "array", items: { type: "string" } }
   },
   required: [
     "paper_title",
     "explainer_story",
+    "public_reception_notes",
     "source_cues",
     "warnings"
   ],
@@ -89,6 +98,7 @@ const normalizePaperBrief = (json: any): PaperBrief => {
     method_summary: "",
     result_summary: "",
     limitations: [],
+    public_reception_notes: coerceStrings(json.public_reception_notes),
     source_cues: coerceStrings(json.source_cues),
     warnings: coerceStrings(json.warnings),
     page_suggestions: {
@@ -117,14 +127,17 @@ export const analyzePaperPdf = async (params: AnalyzePaperPdfParams): Promise<Pa
 규칙:
 - PDF에서 확인되는 내용만 사용하세요.
 - 불확실한 내용은 warnings/source_cues에 표시하세요.
-- JSON 필드는 paper_title, explainer_story, source_cues, warnings만 채우세요.
+- 논문 제목/저자/DOI 등으로 확인 가능한 공개 반응이 있으면 public_reception_notes에 넣으세요.
+- JSON 필드는 paper_title, explainer_story, public_reception_notes, source_cues, warnings만 채우세요.
+${paperReceptionGuidance}
 ${paperStoryGuidance}`
           }
         ]
       },
       config: {
         systemInstruction: "당신은 논문을 문외한용 해설 서사로 바꾸는 연구 스토리 에디터입니다. 출력은 JSON만 반환하세요.",
-        responseJsonSchema: paperBriefResponseJsonSchema
+        responseJsonSchema: paperBriefResponseJsonSchema,
+        tools: [{ googleSearch: {} }]
       }
     }
   });
@@ -153,7 +166,9 @@ export const analyzePaperUrl = async (params: AnalyzePaperUrlParams): Promise<Pa
 - PDF 원문 또는 본문 전체가 확인되지 않으면 방법/결과/한계를 과감히 단정하지 말고 warnings와 source_cues에 접근 한계를 적으세요.
 - DOI/저널 랜딩/초록 페이지만 확인되는 경우에도 확인 가능한 범위에서 보수적인 해설 원고를 만드세요.
 - source_cues에는 사용한 URL, PDF 링크, 초록/본문/메타데이터 접근 상태를 짧게 남기세요.
-- JSON 필드는 paper_title, explainer_story, source_cues, warnings만 채우세요.
+- 공개 리뷰, 학회/전문가 코멘트, 뉴스레터/블로그, X/Reddit 같은 커뮤니티 반응이 확인되면 public_reception_notes에 넣으세요.
+- JSON 필드는 paper_title, explainer_story, public_reception_notes, source_cues, warnings만 채우세요.
+${paperReceptionGuidance}
 ${paperStoryGuidance}`
           }
         ]

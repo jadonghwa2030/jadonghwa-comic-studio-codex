@@ -160,6 +160,7 @@ export interface PaperBrief {
   method_summary: string;
   result_summary: string;
   limitations: string[];
+  public_reception_notes: string[];
   source_cues: string[];
   warnings: string[];
   page_suggestions: Record<ScriptDetail, number>;
