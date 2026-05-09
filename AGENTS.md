@@ -28,9 +28,9 @@ The app is intended to be friendly to another user's Codex environment:
 
 - Read `README.md` first when setting up the project.
 - Treat this repo as a local app, not a hosted SaaS backend.
-- Main generation uses Codex/OpenAI OAuth through the local `openai-oauth` proxy.
-- Do not add direct API-key generation paths unless the user explicitly asks.
-- Do not invent secrets, account tokens, or OAuth credentials. Ask the user to run/login when needed.
+- Text planning, analysis, and final script writing use the server-side Gemini API (`GEMINI_API_KEY`, default model `gemini-3-pro-preview`).
+- Final comic images and character images use Codex/OpenAI OAuth through the local `openai-oauth` proxy.
+- Do not invent secrets, account tokens, API keys, or OAuth credentials. Ask the user to run/login or provide local env values when needed.
 
 ## Safe Setup Flow For Codex
 
@@ -40,11 +40,12 @@ When a user asks to set up or run this repo on a new machine, prefer this flow:
 2. Read `README.md`, `package.json`, and `.env.example`.
 3. Run `npm run setup`.
 4. Run `npm install` if dependencies are missing.
-5. Ask the user to run `npx @openai/codex login` if Codex OAuth is not available.
-6. Run `npm run dev`.
-7. Verify the app at the frontend URL printed by Vite (default: `http://localhost:3000`; if `3000` is busy, Vite may choose another localhost port).
-8. Verify backend health at `http://127.0.0.1:8787/api/health`.
-9. Report the actual frontend URL, backend health result, and any missing configuration.
+5. Ask the user to add `GEMINI_API_KEY` to `.env.local` if Gemini is not configured.
+6. Ask the user to run `npx @openai/codex login` if Codex OAuth is not available.
+7. Run `npm run dev`.
+8. Verify the app at the frontend URL printed by Vite (default: `http://localhost:3000`; if `3000` is busy, Vite may choose another localhost port).
+9. Verify backend health at `http://127.0.0.1:8787/api/health`.
+10. Report the actual frontend URL, backend health result, and any missing configuration.
 
 Do not commit or expose `.env.local`, local generated outputs, user-uploaded papers, exported ZIPs, or `local-project-archive/`.
 

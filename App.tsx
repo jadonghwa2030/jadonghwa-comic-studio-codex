@@ -123,6 +123,8 @@ interface HealthResponse {
   codex_oauth_autostart?: boolean;
   codex_oauth_port?: number;
   codex_image_model?: string;
+  gemini_text_model?: string;
+  gemini_api_configured?: boolean;
 }
 
 interface OAuthStatusResponse {
@@ -146,6 +148,12 @@ const getCodexImageModelLabel = (model?: string): string => {
   if (normalized === "gpt-5.4-mini") return "Codex GPT 5.4 Mini";
   if (normalized === "gpt-5.4") return "Codex GPT 5.4";
   if (normalized === "gpt-5.5") return "Codex GPT 5.5";
+  return normalized;
+};
+
+const getGeminiTextModelLabel = (model?: string): string => {
+  const normalized = String(model || "").trim() || GEMINI_PLANNER_MODEL;
+  if (normalized === "gemini-3-pro-preview") return "Gemini 3 Pro";
   return normalized;
 };
 
@@ -1154,8 +1162,10 @@ const App: React.FC = () => {
   const [topic, setTopic] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
   const [localApiAvailable, setLocalApiAvailable] = useState(false);
-  const [localStudioIssue, setLocalStudioIssue] = useState<"api" | "oauth" | null>(null);
+  const [localStudioIssue, setLocalStudioIssue] = useState<"api" | "gemini" | "oauth" | null>(null);
   const [codexImageModel, setCodexImageModel] = useState(FALLBACK_CODEX_IMAGE_MODEL);
+  const [geminiTextModel, setGeminiTextModel] = useState(GEMINI_PLANNER_MODEL);
+  const [geminiApiConfigured, setGeminiApiConfigured] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [geminiReasoningEffort, setGeminiReasoningEffort] = useState<GeminiReasoningEffort>("medium");
   const [productionMode, setProductionMode] = useState<"single" | "new_longform" | "longform">("single");
@@ -1441,13 +1451,18 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       let apiAvailable = false;
+      let geminiReady = false;
       let oauthReady = false;
       try {
         const health = await getJson<HealthResponse>("/api/health");
         setCodexImageModel(normalizeCodexImageModel(health.codex_image_model));
+        setGeminiTextModel(String(health.gemini_text_model || "").trim() || GEMINI_PLANNER_MODEL);
+        geminiReady = Boolean(health.gemini_api_configured);
+        setGeminiApiConfigured(geminiReady);
         apiAvailable = true;
       } catch (e) {
         console.warn("Local API health check failed. Is the backend running?", e);
+        setGeminiApiConfigured(false);
       }
       setLocalApiAvailable(apiAvailable);
 
@@ -1460,8 +1475,8 @@ const App: React.FC = () => {
         }
       }
 
-      setHasApiKey(apiAvailable && oauthReady);
-      setLocalStudioIssue(!apiAvailable ? "api" : oauthReady ? null : "oauth");
+      setHasApiKey(apiAvailable && geminiReady && oauthReady);
+      setLocalStudioIssue(!apiAvailable ? "api" : !geminiReady ? "gemini" : oauthReady ? null : "oauth");
 
       const styles = await getStylePresets();
       setStylePresets(styles);
@@ -4231,18 +4246,33 @@ const App: React.FC = () => {
 
   if (!hasApiKey) {
     const isOauthIssue = localStudioIssue === "oauth";
+    const isGeminiIssue = localStudioIssue === "gemini";
+    const title = isGeminiIssue
+      ? ui("Gemini 키 필요", "Gemini Key Required")
+      : isOauthIssue
+        ? ui("Codex 로그인 필요", "Codex Login Required")
+        : ui("로컬 스튜디오 오프라인", "Local Studio Offline");
+    const action = isGeminiIssue
+      ? "GEMINI_API_KEY"
+      : isOauthIssue
+        ? "npx @openai/codex login"
+        : "npm run dev";
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
         <div className="bg-white border-4 border-black p-8 comic-shadow max-w-md w-full">
           <Key className="w-16 h-16 mx-auto mb-4 text-blue-600" />
-          <h1 className="text-2xl font-black mb-4 uppercase">{isOauthIssue ? ui("Codex 로그인 필요", "Codex Login Required") : ui("로컬 스튜디오 오프라인", "Local Studio Offline")}</h1>
+          <h1 className="text-2xl font-black mb-4 uppercase">{title}</h1>
           <p className="text-sm font-bold text-slate-500 mb-6">
-            {isOauthIssue
+            {isGeminiIssue
+              ? ui(".env.local에 Gemini API 키를 넣고 로컬 API를 재시작해줘.", "Add a Gemini API key to .env.local and restart the local API.")
+              : isOauthIssue
               ? ui("로컬 API는 켜져 있는데 Codex OAuth가 아직 준비되지 않았어. 터미널에서", "The local API is running, but Codex OAuth is not ready. Run")
               : ui("로컬 서버가 필요해.", "Local server is required.")}
             {" "}
-            <span className="font-black">{isOauthIssue ? "npx @openai/codex login" : "npm run dev"}</span>
-            {isOauthIssue
+            <span className="font-black">{action}</span>
+            {isGeminiIssue
+              ? ui("를 채운 뒤 새로고침해줘.", " and refresh.")
+              : isOauthIssue
               ? ui("을 실행한 뒤 새로고침해줘.", " and refresh.")
               : ui("로 실행하고, Codex 로그인이 안 되어 있으면 터미널에서 npx @openai/codex login을 먼저 실행해줘.", " should be running. If Codex is not logged in, run npx @openai/codex login first.")}
           </p>
@@ -6289,13 +6319,18 @@ const App: React.FC = () => {
 
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("플래너 모델", "Planner Model")}</p>
-                    <p className="text-xs font-black text-slate-800">Codex OAuth</p>
-                    {!hasApiKey && (
-                      <p className="text-[10px] font-black text-red-600 mt-2">
-                        {ui("로컬 서버가 연결되지 않아서 최종 플랜 생성을 시작할 수 없어.", "Local server is not connected, so plan generation cannot start.")}
-                      </p>
+	                  <div>
+	                    <p className="text-[10px] font-black uppercase text-slate-600 mb-1">{ui("플래너 모델", "Planner Model")}</p>
+	                    <p className="text-xs font-black text-slate-800">{getGeminiTextModelLabel(geminiTextModel)} · Gemini API</p>
+	                    {localApiAvailable && !geminiApiConfigured && (
+	                      <p className="text-[10px] font-black text-red-600 mt-2">
+	                        {ui("Gemini API 키가 없어서 플랜 생성을 시작할 수 없어.", "Gemini API key is missing, so plan generation cannot start.")}
+	                      </p>
+	                    )}
+	                    {!localApiAvailable && (
+	                      <p className="text-[10px] font-black text-red-600 mt-2">
+	                        {ui("로컬 서버가 연결되지 않아서 최종 플랜 생성을 시작할 수 없어.", "Local server is not connected, so plan generation cannot start.")}
+	                      </p>
                     )}
                   </div>
                   <div className="md:min-w-[260px]">

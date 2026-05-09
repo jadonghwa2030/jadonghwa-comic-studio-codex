@@ -1,4 +1,4 @@
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 export interface ResearchDigestResult {
   notes: string;
@@ -32,9 +32,8 @@ export const analyzeResearchReport = async (params: {
   file?: File;
 }): Promise<ResearchDigestResult> => {
   const filePayload = params.file ? await fileToBase64(params.file) : undefined;
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [
           filePayload
@@ -52,7 +51,6 @@ ${String(params.report_text || "").slice(0, 60000)}
       config: {
         responseMimeType: "text/plain"
       }
-    }
   });
   return {
     notes: String(response.text || "").trim(),

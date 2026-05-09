@@ -3,6 +3,7 @@ import { CastRole, CharacterCandidate, CharacterSpec, ImageSize } from "../types
 import { parseDataUrl } from "./dataUrl";
 import { normalizeGeminiImageSize } from "./geminiImageCompat";
 import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 export interface ContentCastSuggestion {
   role: CastRole;
@@ -89,9 +90,8 @@ export const suggestCastFromContent = async (params: {
     selectedStyle.user_style_prompt ? `사용자 추가 지시: ${selectedStyle.user_style_prompt}` : ""
   ].filter(Boolean).join("\n");
 
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [{
           text: `다음 자료를 바탕으로 만화/웹툰 제작에 필요한 캐릭터 캐스트를 제안해줘.
@@ -162,12 +162,11 @@ ${sourceText.slice(0, 60000)}
           additionalProperties: false
         }
       }
-    }
   });
 
   const rawResponseText = String(response.text || "").trim();
   if (!rawResponseText) {
-    throw new Error("Codex가 빈 응답을 반환했어. 로컬 API 로그에서 `/api/codex/generate-content` 실패 기록을 확인해줘.");
+    throw new Error("Gemini가 빈 응답을 반환했어. 로컬 API 로그에서 `/api/gemini/generate-content` 실패 기록을 확인해줘.");
   }
 
   let json: any;
@@ -247,9 +246,8 @@ export const analyzeEpisodeCastFromLibrary = async (params: {
     selectedStyle.user_style_prompt ? `사용자 추가 지시: ${selectedStyle.user_style_prompt}` : ""
   ].filter(Boolean).join("\n");
 
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [{
           text: `장편 만화의 이번 화 원고를 읽고, 캐릭터 보관함에서 이번 화에 실제로 등장하는 인물만 골라줘.
@@ -344,12 +342,11 @@ ${episodeText.slice(0, 60000)}
           additionalProperties: false
         }
       }
-    }
   });
 
   const rawResponseText = String(response.text || "").trim();
   if (!rawResponseText) {
-    throw new Error("Codex가 빈 응답을 반환했어. 이번 화 출연진 분석을 다시 시도해줘.");
+    throw new Error("Gemini가 빈 응답을 반환했어. 이번 화 출연진 분석을 다시 시도해줘.");
   }
 
   let json: any;
@@ -571,9 +568,8 @@ export const analyzeCharacterImage = async (imageDataUrl: string): Promise<strin
 - For illustrated/cartoon characters, translate stylized features into neutral anatomy/appearance terms instead of copying the illustration style.
 - All string values should be concise (1-5 words each).`;
 
-    const response = await postJson<{ text: string; candidates?: any[] }>("/api/codex/generate-content", {
-      request: {
-        model: "gpt-5.5",
+    const response = await generateGeminiContent<{ text: string; candidates?: any[] }>({
+        model: "gemini-3-pro-preview",
         contents: {
           parts: [
             { inlineData: { mimeType: parsed.mimeType, data: parsed.base64 } },
@@ -601,12 +597,11 @@ export const analyzeCharacterImage = async (imageDataUrl: string): Promise<strin
             required: ["gender", "age_group", "face_shape", "eye_description", "body_type", "skin_tone", "hair_length", "hair_style", "hair_color", "outfit_description", "distinguishing_features"]
           }
         }
-      }
     });
 
     const rawText = response.text?.trim() || response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (!rawText) {
-      console.warn("[analyzeCharacterImage] Empty response from Codex");
+      console.warn("[analyzeCharacterImage] Empty response from Gemini");
       return null;
     }
 

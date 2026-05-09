@@ -1,6 +1,6 @@
 import { Type } from "./schemaTypes";
 import { Language, PageSpec, SeriesSpec } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 const safeParseJson = (text: string) => {
   try {
@@ -92,9 +92,8 @@ INPUT JSON:
 ${JSON.stringify(payload)}
 `;
 
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction,
@@ -133,7 +132,6 @@ ${JSON.stringify(payload)}
           required: ["series_title", "pages"]
         }
       }
-    }
   });
 
   const data = safeParseJson(response.text) as any;

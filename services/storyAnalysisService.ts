@@ -1,5 +1,5 @@
 import { AgeRating, PacingPreference, PublicationFormat, ScriptDetail, StoryGenre, StoryInputType } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 export interface StoryAnalysisResult {
   notes: string;
@@ -15,9 +15,8 @@ export const analyzeStoryScript = async (params: {
   age_rating: AgeRating;
   publication_format: PublicationFormat;
 }): Promise<StoryAnalysisResult> => {
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [{
           text: `다음 텍스트를 만화 각색용 Story Brief로 분석해줘.
@@ -58,7 +57,6 @@ ${params.script_text.slice(0, 60000)}
           additionalProperties: false
         }
       }
-    }
   });
   const json = JSON.parse(response.text.match(/\{[\s\S]*\}/)?.[0] || response.text);
   return {

@@ -1,5 +1,5 @@
 import type { ScriptDetail } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 export interface NarrativePageSuggestionResult {
   page_suggestions: Record<ScriptDetail, number>;
@@ -18,9 +18,8 @@ export const suggestNarrativePageCounts = async (params: {
     };
   }
 
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [{
           text: `다음 원고를 만화 페이지로 나누려 한다.
@@ -58,7 +57,6 @@ ${narrative.slice(0, 60000)}
           additionalProperties: false
         }
       }
-    }
   });
 
   const json = JSON.parse(response.text.match(/\{[\s\S]*\}/)?.[0] || response.text);

@@ -1,5 +1,5 @@
 import type { AudienceLevel, PaperBrief, PublicationFormat, ScriptDetail } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 const fileToBase64 = (file: File): Promise<{ name: string; mimeType: string; base64: string }> => {
   return new Promise((resolve, reject) => {
@@ -111,9 +111,8 @@ const normalizePaperBrief = (json: any): PaperBrief => {
 
 export const analyzePaperPdf = async (params: AnalyzePaperPdfParams): Promise<PaperBrief> => {
   const filePayload = await fileToBase64(params.file);
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [
           { inlineData: { mimeType: filePayload.mimeType, data: filePayload.base64, name: filePayload.name } },
@@ -139,7 +138,6 @@ ${paperStoryGuidance}`
         responseJsonSchema: paperBriefResponseJsonSchema,
         tools: [{ googleSearch: {} }]
       }
-    }
   });
   const json = JSON.parse(response.text.match(/\{[\s\S]*\}/)?.[0] || response.text);
   return normalizePaperBrief(json);
@@ -147,9 +145,8 @@ ${paperStoryGuidance}`
 
 export const analyzePaperUrl = async (params: AnalyzePaperUrlParams): Promise<PaperBrief> => {
   const url = params.url.trim();
-  const response = await postJson<{ text: string }>("/api/codex/generate-content", {
-    request: {
-      model: "gpt-5.5",
+  const response = await generateGeminiContent<{ text: string }>({
+      model: "gemini-3-pro-preview",
       contents: {
         parts: [
           {
@@ -178,7 +175,6 @@ ${paperStoryGuidance}`
         responseJsonSchema: paperBriefResponseJsonSchema,
         tools: [{ googleSearch: {} }]
       }
-    }
   });
   const json = JSON.parse(response.text.match(/\{[\s\S]*\}/)?.[0] || response.text);
   return normalizePaperBrief(json);

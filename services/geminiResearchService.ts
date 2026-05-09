@@ -1,12 +1,16 @@
 import type { GroundingSource, ResearchPack } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 
 const getGeminiResearchModel = (): string => {
+  const geminiPreferred = (import.meta as any).env?.VITE_GEMINI_RESEARCH_MODEL as unknown;
+  if (typeof geminiPreferred === "string" && geminiPreferred.trim()) return geminiPreferred.trim();
   const codexPreferred = (import.meta as any).env?.VITE_CODEX_RESEARCH_MODEL as unknown;
-  if (typeof codexPreferred === "string" && codexPreferred.trim()) return codexPreferred.trim();
+  if (typeof codexPreferred === "string" && codexPreferred.trim().startsWith("gemini-")) return codexPreferred.trim();
+  const geminiPlanner = (import.meta as any).env?.VITE_GEMINI_PLANNER_MODEL as unknown;
+  if (typeof geminiPlanner === "string" && geminiPlanner.trim()) return geminiPlanner.trim();
   const codexPlanner = (import.meta as any).env?.VITE_CODEX_PLANNER_MODEL as unknown;
-  if (typeof codexPlanner === "string" && codexPlanner.trim()) return codexPlanner.trim();
-  return "gpt-5.5";
+  if (typeof codexPlanner === "string" && codexPlanner.trim().startsWith("gemini-")) return codexPlanner.trim();
+  return "gemini-3-pro-preview";
 };
 
 const getGeminiResearchMaxOutputTokens = (): number => {
@@ -53,7 +57,7 @@ const extractGeminiSources = (json: any): GroundingSource[] => {
 };
 
 const geminiGenerateContent = async (request: any): Promise<any> => {
-  return await postJson<any>("/api/codex/generate-content", { request });
+  return await generateGeminiContent<any>(request);
 };
 
 export const generateGeminiResearchPack = async (params: {

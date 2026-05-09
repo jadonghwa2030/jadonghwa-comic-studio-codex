@@ -2,7 +2,7 @@
 
 Codex-ready local AI comic studio for turning topics, papers, and stories into structured learning comics.
 
-Toon for Codex runs on your own machine and uses your logged-in Codex/OpenAI session through a local `openai-oauth` proxy. It is designed for people who want an AI assistant to help set up and run the app locally without exposing API keys in the repository.
+Toon for Codex runs on your own machine. Text planning uses a server-side Gemini API key, while final comic and character images use your logged-in Codex/OpenAI session through a local `openai-oauth` proxy. It is designed for people who want an AI assistant to help set up and run the app locally without exposing secrets in the repository.
 
 ## What This Makes
 
@@ -17,7 +17,7 @@ The app is not just a one-shot "prompt to comic" demo. Its core value is the pla
 ## Why It Is Different
 
 - **Codex-ready local setup**: designed to be opened by Codex and configured on another user's computer.
-- **No direct API key generation path**: main planning and image generation use Codex OAuth, not checked-in API secrets.
+- **Split provider pipeline**: planning, analysis, and script writing use a server-side Gemini API key; final comic and character image generation use Codex/OpenAI OAuth.
 - **Learning-first planning**: pages can be planned as definitions, comparisons, processes, reveals, quizzes, misconceptions, experiments, and more.
 - **Paper/story inputs**: supports educational topics, prose/story scripts, and paper-style explainer flows.
 - **Character and style consistency**: supports recurring cast, reference images, strict/loose identity rules, style references, and previous-page style continuity.
@@ -30,6 +30,7 @@ Requirements:
 
 - Node.js `22+`
 - A working Codex login on the machine that will run generation
+- A Gemini API key in `.env.local` for planning and script generation
 
 Install and prepare local config:
 
@@ -89,12 +90,13 @@ Important `.env.example` values:
 
 - `CODEX_OAUTH_PROXY_PORT=10531`
 - `LOCAL_API_PORT=8787`
-- `CODEX_TEXT_MODEL=gpt-5.5`
+- `GEMINI_TEXT_MODEL=gemini-3-pro-preview`
+- `GEMINI_API_KEY=...` in `.env.local`
 - `CODEX_IMAGE_MODEL=gpt-5.4-mini`
 - `VITE_MAX_PAGE_COUNT=12`
 - `LOCAL_API_MAX_PAGE_COUNT=12`
 
-The frontend reads the active Codex image model from `/api/health`, so `CODEX_IMAGE_MODEL` also affects normal in-app page generation.
+The frontend reads the active Codex image model and Gemini text model from `/api/health`. `CODEX_IMAGE_MODEL` affects final in-app page and character image generation; `GEMINI_TEXT_MODEL` affects planning, analysis, and script writing.
 
 These are local example values copied by `npm run setup` when `.env.local` is missing. Runtime code also has internal fallbacks, so treat `.env.example` as the editable local configuration surface.
 
@@ -107,7 +109,7 @@ Project archive:
 ## Main Pipeline
 
 1. **Input**: choose educational topic, story input, or paper-style material.
-2. **Planning**: Codex builds a page-level story plan, learning intent, cast/style anchors, and panel beats.
+2. **Planning**: Gemini builds a page-level story plan, learning intent, cast/style anchors, and panel beats.
 3. **Prompt assembly**: each page becomes a detailed production prompt with layout, character, style, text, and safety rules.
 4. **Image generation**: the local backend calls Codex image generation through the OAuth proxy.
 5. **Review and regenerate**: generated pages stay visible; failed pages can be retried without losing the rest.
@@ -134,6 +136,8 @@ Check:
 ```bash
 npx @openai/codex login
 ```
+
+Also confirm `.env.local` includes `GEMINI_API_KEY` for text planning.
 
 Then open:
 

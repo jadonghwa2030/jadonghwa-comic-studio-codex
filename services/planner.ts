@@ -1,7 +1,7 @@
 
 import { Type } from "./schemaTypes";
 import { SeriesSpec, PageSpec, Language, AudienceLevel, NarrativeRole, LayoutVariety, LayoutTemplate, ImageSize, GroundingSource, ResearchMode, ResearchPack, QuestionType, ScriptDetail, DeliveryStyleSpec, ComicMode, ToneMode, ToneLevel, IntroStyle, CharacterSpec, CharacterConsistencyMode, PlannerDebugChunk, PlannerDebugInfo, SeriesPlan, OutputMode, I2VAspectRatio, PlanOutline, PageOutlineEntry, PublicationFormat, MangaColorMode, StoryInputType, StoryAdaptationMode, AgeRating, StoryGenre, PacingPreference, PaperBrief, GeminiReasoningEffort, LearningLayoutDensity, LearningLayoutFlow, LearningLayoutIntent, LearningLayoutRole, WEBTOON_CORE_PATTERNS, WEBTOON_GAP_PROFILES, WEBTOON_LAYOUT_MODIFIERS, WEBTOON_SCROLL_BEAT_KINDS, WEBTOON_SCROLL_CHOREOGRAPHY_PATTERNS, WEBTOON_SCROLL_DISTANCES, WEBTOON_SCROLL_FRAMINGS, WEBTOON_SCROLL_SHAPE_STYLES, WEBTOON_SCROLL_VERTICAL_ROLES, WEBTOON_SCROLL_WIDTH_PROFILES, WEBTOON_SCROLL_X_POSITIONS, WebtoonCorePattern, WebtoonDynamicLayout, WebtoonScrollBeatKind, WebtoonScrollChoreography, WebtoonScrollChoreographyPattern, WebtoonScrollDistance, WebtoonScrollFraming, WebtoonScrollSegmentRole, WebtoonScrollShapeStyle, WebtoonScrollVerticalRole, WebtoonScrollWidthProfile, WebtoonScrollXPosition } from "../types";
-import { postJson } from "./localApi";
+import { generateGeminiContent } from "./textGenerationService";
 import { parseDynamicLayout, buildDynamicWebtoonTemplate } from "./webtoonLayoutBuilder";
 import { DEFAULT_WEBTOON_PATTERN_CANDIDATES, chooseBestPattern, inferFocusPanelIndexForPattern, inferGapProfileForPattern } from "./webtoonPatternScoring";
 
@@ -861,11 +861,13 @@ const getGeminiMaxPagesPerRequest = (): number => {
   return DEFAULT_MAX_PAGES_PER_REQUEST;
 };
 
-export const GEMINI_PLANNER_MODEL = "gpt-5.5";
+export const GEMINI_PLANNER_MODEL = "gemini-3-pro-preview";
 
 const getGeminiPlannerModel = (): string => {
+  const geminiPreferred = (import.meta as any).env?.VITE_GEMINI_PLANNER_MODEL as unknown;
+  if (typeof geminiPreferred === "string" && geminiPreferred.trim()) return geminiPreferred.trim();
   const codexPreferred = (import.meta as any).env?.VITE_CODEX_PLANNER_MODEL as unknown;
-  if (typeof codexPreferred === "string" && codexPreferred.trim()) return codexPreferred.trim();
+  if (typeof codexPreferred === "string" && codexPreferred.trim().startsWith("gemini-")) return codexPreferred.trim();
   return GEMINI_PLANNER_MODEL;
 };
 
@@ -990,12 +992,10 @@ const requestGeminiStructured = async (params: {
   let json: any = null;
   for (const config of attempts) {
     try {
-      json = await postJson<any>("/api/codex/generate-content", {
-        request: {
-          model,
-          contents: { parts: [{ text: params.contents }] },
-          config
-        }
+      json = await generateGeminiContent<any>({
+        model,
+        contents: { parts: [{ text: params.contents }] },
+        config
       });
       break;
     } catch (e: any) {

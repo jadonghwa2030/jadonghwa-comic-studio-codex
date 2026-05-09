@@ -26,6 +26,9 @@ const CODEX_DEFAULT_IMAGE_MODEL = String(process.env.CODEX_IMAGE_MODEL || "gpt-5
 const CODEX_DEFAULT_TEXT_MODEL = String(process.env.CODEX_TEXT_MODEL || "gpt-5.5").trim() || "gpt-5.5";
 const CODEX_DEFAULT_MODERATION = String(process.env.CODEX_IMAGE_MODERATION || "low").trim() || "low";
 const CODEX_VALID_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]);
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+const GEMINI_TEXT_MODEL = String(process.env.GEMINI_TEXT_MODEL || "gemini-3-pro-preview").trim() || "gemini-3-pro-preview";
+const GEMINI_API_BASE_URL = String(process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
 const GPT_IMAGE_DIMENSION_STEP = 16;
 const GPT_IMAGE_MAX_EDGE = 3840;
 const GPT_IMAGE_MAX_PIXELS = 8_294_400;
@@ -626,6 +629,111 @@ const generateCodexContent = async (request) => {
   };
 };
 
+const buildGeminiPart = (part) => {
+  if (typeof part?.text === "string") return { text: part.text };
+
+  const inlineData = part?.inlineData || part?.inline_data;
+  const mimeType = inlineData?.mimeType || inlineData?.mime_type || "application/octet-stream";
+  const data = inlineData?.data;
+  if (typeof data === "string" && data.trim()) {
+    return {
+      inlineData: {
+        mimeType,
+        data
+      }
+    };
+  }
+
+  return null;
+};
+
+const normalizeGeminiContents = (request) => {
+  const contents = request?.contents;
+  if (Array.isArray(contents)) return contents;
+
+  const parts = getRequestParts(request).map(buildGeminiPart).filter(Boolean);
+  return [{ role: "user", parts }];
+};
+
+const buildGeminiGenerationConfig = (request) => {
+  const config = request?.config || {};
+  const generationConfig = {};
+  const responseMimeType = String(config.responseMimeType || config.response_mime_type || "").trim();
+  const maxOutputTokens = normalizeMaxOutputTokens(config.maxOutputTokens ?? config.max_output_tokens);
+
+  if (responseMimeType) generationConfig.responseMimeType = responseMimeType;
+  if (maxOutputTokens) generationConfig.maxOutputTokens = maxOutputTokens;
+  if (config.responseJsonSchema) generationConfig.responseJsonSchema = config.responseJsonSchema;
+  if (config.responseSchema) generationConfig.responseSchema = config.responseSchema;
+
+  return generationConfig;
+};
+
+const buildGeminiBody = (request) => {
+  const config = request?.config || {};
+  const systemInstruction = String(config.systemInstruction || config.system_instruction || "").trim();
+  const tools = Array.isArray(config.tools) ? config.tools : [];
+  const generationConfig = buildGeminiGenerationConfig(request);
+  const body = {
+    contents: normalizeGeminiContents(request),
+    ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
+    ...(tools.length > 0 ? { tools } : {})
+  };
+
+  if (systemInstruction) {
+    body.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  return body;
+};
+
+const extractGeminiText = (json) => {
+  if (typeof json?.text === "string" && json.text.trim()) return json.text.trim();
+  const parts = json?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) => (typeof part?.text === "string" ? part.text : ""))
+    .join("\n")
+    .trim();
+};
+
+const generateGeminiContent = async (request) => {
+  if (!GEMINI_API_KEY) {
+    const err = new Error("Gemini API key is missing. Add GEMINI_API_KEY to .env.local.");
+    err.status = 401;
+    throw err;
+  }
+
+  const model = String(request?.model || GEMINI_TEXT_MODEL).trim() || GEMINI_TEXT_MODEL;
+  const url = `${GEMINI_API_BASE_URL}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildGeminiBody(request))
+  });
+
+  if (!response.ok) {
+    const rawText = await response.text();
+    const parsed = parseJsonSafe(rawText);
+    const message = sanitizeErrorMessage(parsed?.error?.message || rawText) ||
+      `Gemini API request failed (${response.status}).`;
+    const err = new Error(message);
+    err.status = response.status;
+    throw err;
+  }
+
+  const json = await response.json();
+  const text = extractGeminiText(json);
+  if (!text) throw new Error("Gemini response did not include text.");
+  return {
+    text,
+    candidates: json?.candidates || [{ content: { parts: [{ text }] } }],
+    raw_response: json,
+    usage: json?.usageMetadata || null,
+    model
+  };
+};
+
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: JSON_LIMIT }));
@@ -635,7 +743,9 @@ app.get("/api/health", (_req, res) => {
     codex_oauth_autostart: CODEX_OAUTH_AUTOSTART,
     codex_oauth_port: CODEX_OAUTH_PROXY_PORT,
     codex_image_model: CODEX_DEFAULT_IMAGE_MODEL,
-    codex_text_model: CODEX_DEFAULT_TEXT_MODEL
+    codex_text_model: CODEX_DEFAULT_TEXT_MODEL,
+    gemini_text_model: GEMINI_TEXT_MODEL,
+    gemini_api_configured: Boolean(GEMINI_API_KEY)
   });
 });
 
@@ -757,6 +867,30 @@ app.post("/api/codex/generate-content", async (req, res) => {
     console.error("[api] codex generate-content failed", {
       status: e?.status || 502,
       model: normalizeCodexImageModel(request?.model || CODEX_DEFAULT_TEXT_MODEL),
+      message
+    });
+    res.status(e?.status || 502).json({ error: { message } });
+  }
+});
+
+app.post("/api/gemini/generate-content", async (req, res) => {
+  const request = req.body?.request ?? req.body;
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    res.status(400).json({ error: { message: "Missing request payload." } });
+    return;
+  }
+  if (!request.contents) {
+    res.status(400).json({ error: { message: "Invalid request payload: `contents` is required." } });
+    return;
+  }
+
+  try {
+    res.json(await generateGeminiContent(request));
+  } catch (e) {
+    const message = sanitizeErrorMessage(e?.message) || "Gemini API text request failed.";
+    console.error("[api] gemini generate-content failed", {
+      status: e?.status || 502,
+      model: String(request?.model || GEMINI_TEXT_MODEL).trim() || GEMINI_TEXT_MODEL,
       message
     });
     res.status(e?.status || 502).json({ error: { message } });
