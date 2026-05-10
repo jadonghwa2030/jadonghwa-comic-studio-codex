@@ -32,5 +32,6 @@ console.log("Next steps:");
 console.log("- npm install");
 console.log("- Run `npx @openai/codex login` once if Codex is not logged in");
 console.log("- Add GEMINI_API_KEY to .env.local for planning/text generation");
+console.log("- npm run doctor to check local setup");
 console.log("- npm run security:check before publishing or opening a PR");
 console.log("- npm run dev (starts local backend + Vite)");

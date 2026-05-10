@@ -88,9 +88,9 @@ ${prompt}
 const buildInstructionsMarkdown = (manifest: {
   project_title: string;
   pages: HandoffPageManifestEntry[];
-}): string => `# Toon for Codex Handoff
+}): string => `# Jadonghwa Comic Studio for Codex Handoff
 
-이 ZIP은 Toon for Codex가 만든 GPT Image 2용 제작 묶음이야.
+이 ZIP은 Jadonghwa Comic Studio for Codex가 만든 GPT Image 2용 제작 묶음이야.
 
 ## 작업 순서
 
@@ -99,7 +99,7 @@ const buildInstructionsMarkdown = (manifest: {
 3. 각 프롬프트의 \`Reference Images\`에 적힌 파일을 함께 참고한다.
 4. Codex 앱의 이미지 생성 기능으로 GPT Image 2 이미지를 만든다.
 5. 결과 파일은 \`outputs/page-001.png\`, \`outputs/page-002.png\` 형식으로 저장한다.
-6. 모든 결과를 만든 뒤 Toon for Codex에서 다시 가져온다.
+6. 모든 결과를 만든 뒤 Jadonghwa Comic Studio for Codex에서 다시 가져온다.
 
 ## 프로젝트
 
@@ -185,8 +185,8 @@ export const buildCodexHandoffFiles = ({
   const manifest = {
     schema_version: 1,
     generated_at: new Date().toISOString(),
-    project_title: seriesPlan.series_spec.series.title || "Toon for Codex",
-    source: "Toon for Codex Handoff",
+    project_title: seriesPlan.series_spec.series.title || "Jadonghwa Comic Studio",
+    source: "Jadonghwa Comic Studio for Codex Handoff",
     pages
   };
 

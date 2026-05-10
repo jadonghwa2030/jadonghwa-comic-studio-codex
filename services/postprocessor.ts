@@ -22,7 +22,7 @@ const sanitizeFilename = (name: string): string =>
     .trim()
     .replace(/[\\/:*?"<>|]+/g, "_")
     .replace(/\s+/g, " ")
-    .slice(0, 180) || "Toon for Codex";
+    .slice(0, 180) || "Jadonghwa Comic Studio";
 
 const extFromMime = (mimeType: string | null | undefined): string | null => {
   if (!mimeType) return null;
@@ -95,7 +95,7 @@ export const downloadAsZip = async (
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.href = url;
-  link.download = `${sanitizeFilename(zipName || "Toon for Codex")}.zip`;
+  link.download = `${sanitizeFilename(zipName || "Jadonghwa Comic Studio")}.zip`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
@@ -122,7 +122,7 @@ export const downloadFilesAsZip = (
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.href = url;
-  link.download = `${sanitizeFilename(zipName || "Toon for Codex_files")}.zip`;
+  link.download = `${sanitizeFilename(zipName || "Jadonghwa Comic Studio_files")}.zip`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };

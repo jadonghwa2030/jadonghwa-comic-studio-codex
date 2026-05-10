@@ -1,10 +1,12 @@
 {
-  "name": "toon-for-codex",
+  "name": "jadonghwa-comic-studio-codex",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "security:check": "node scripts/security-check.mjs",
     "dev": "concurrently -n api,web -c green,cyan \"node --watch server/index.mjs\" \"vite\"",
     "dev:web": "vite",

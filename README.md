@@ -1,8 +1,8 @@
-# Toon for Codex
+# Jadonghwa Comic Studio for Codex
 
-Codex-ready local AI comic studio for turning topics, papers, and stories into structured learning comics.
+Local AI comic studio for turning topics, papers, and stories into structured learning comics with Codex.
 
-Toon for Codex runs on your own machine. Text planning uses a server-side Gemini API key, while final comic and character images use your logged-in Codex/OpenAI session through a local `openai-oauth` proxy. It is designed for people who want an AI assistant to help set up and run the app locally without exposing secrets in the repository.
+Jadonghwa Comic Studio is the broader studio name. This repository is the Codex Edition: it runs on your own machine, uses Gemini for text planning, and uses your logged-in Codex/OpenAI session through a local `openai-oauth` proxy for final comic and character images.
 
 ## What This Makes
 
@@ -32,12 +32,20 @@ Requirements:
 - A working Codex login on the machine that will run generation
 - A Gemini API key in `.env.local` for planning and script generation
 
+Clone the repository:
+
+```bash
+git clone https://github.com/jadonghwa2030/jadonghwa-comic-studio-codex.git
+cd jadonghwa-comic-studio-codex
+```
+
 Install and prepare local config:
 
 ```bash
 npm run setup
 npm install
 npx @openai/codex login
+npm run doctor
 ```
 
 Run the app:
@@ -63,6 +71,8 @@ http://127.0.0.1:8787/api/health
 ```
 
 `npm run dev` starts both the local backend and the Vite frontend. The backend defaults to port `8787`; Vite defaults to port `3000`; the Codex OAuth proxy defaults to port `10531`. By default, the local API and Vite dev server bind to `127.0.0.1`.
+
+Use `npm run doctor` any time setup feels uncertain. It checks Node.js, dependencies, `.env.local`, Gemini configuration, Codex CLI availability, local API health, and the Codex OAuth proxy.
 
 ## Set This Up With Codex
 
@@ -120,6 +130,7 @@ Project archive:
 
 ```bash
 npm run setup       # Create .env.local if missing and print next steps
+npm run doctor      # Check Node, env, local API health, and Codex OAuth readiness
 npm run dev         # Start local API + Vite frontend
 npm run dev:api     # Start only local API
 npm run dev:web     # Start only Vite frontend
@@ -174,14 +185,20 @@ npm run dev:api
 
 The app stores saved project metadata in `local-project-archive/projects.json` by default. Check whether `LOCAL_PROJECT_ARCHIVE_PATH` was changed or whether the folder was deleted. Browser localStorage is only a fallback/legacy path.
 
+## License
+
+The code is licensed under the MIT License. See [LICENSE](LICENSE).
+
+The Jadonghwa name and branding are not granted for use in derivative product names or branding without permission.
+
 ## Before Public Release
 
 This repository is being prepared for public release, but a few things should be finalized before making it public:
 
 - Add screenshots or sample output images
-- Decide and add `LICENSE` or `LICENSE.md`
 - Run a clean clone setup test
 - Confirm `.env.local`, local archives, generated exports, and private source files are ignored
+- Run `npm run doctor`
 - Run `npm run security:check`
 - Re-read this README from the perspective of a first-time user
 

@@ -4177,7 +4177,7 @@ const App: React.FC = () => {
     setSystemError(null);
     setIsDownloadingZip(true);
     try {
-      const title = seriesPlan.series_spec.series.title || "Toon for Codex";
+      const title = seriesPlan.series_spec.series.title || "Jadonghwa Comic Studio";
       await downloadAsZip(images, `${title}_${fmtConfig.id}_${images.length}${fmtConfig.unitLabel.toLowerCase()}s`);
     } catch (e) {
       console.error(e);
@@ -4204,7 +4204,7 @@ const App: React.FC = () => {
         pageResults,
         useCrossPageStyleConsistency
       });
-      const title = seriesPlan.series_spec.series.title || "Toon for Codex";
+      const title = seriesPlan.series_spec.series.title || "Jadonghwa Comic Studio";
       downloadFilesAsZip(files, `${title}_codex_handoff_${seriesPlan.pages.length}pages`);
     } catch (e) {
       console.error(e);
@@ -4375,7 +4375,14 @@ const App: React.FC = () => {
             <div className="bg-blue-600 p-2 border-2 border-black rotate-3">
               <BookOpen className="text-white w-6 h-6" />
             </div>
-            <h1 className="text-2xl md:text-4xl font-black italic tracking-tighter uppercase">Toon <span className="text-blue-600">for Codex</span></h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h1 className="text-2xl md:text-4xl font-black italic tracking-tighter uppercase">
+                Jadonghwa <span className="text-blue-600">Comic Studio</span>
+              </h1>
+              <span className="border-2 border-black bg-white px-2 py-1 text-[10px] md:text-xs font-black uppercase tracking-normal">
+                Codex Edition
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2 self-end md:self-auto">
             <div className="flex overflow-hidden border-2 border-black bg-white">

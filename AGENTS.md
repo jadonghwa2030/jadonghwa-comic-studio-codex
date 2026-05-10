@@ -22,7 +22,7 @@ For this workspace, prefer local skills over globally installed skills when both
 
 ## Project Identity
 
-Toon for Codex is a local AI comic studio. It turns educational topics, paper-style material, and stories into structured learning comics/webtoon/manga-style page outputs.
+Jadonghwa Comic Studio for Codex is a local AI comic studio. It turns educational topics, paper-style material, and stories into structured learning comics/webtoon/manga-style page outputs.
 
 The app is intended to be friendly to another user's Codex environment:
 
