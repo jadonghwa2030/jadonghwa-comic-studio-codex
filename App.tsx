@@ -1252,7 +1252,7 @@ const App: React.FC = () => {
   const [deliveryStyleId, setDeliveryStyleId] = useState<DeliveryStyleId>("standard");
   const [deliveryCustomInstruction, setDeliveryCustomInstruction] = useState<string>("");
   const [layoutVariety, setLayoutVariety] = useState<LayoutVariety>(DEFAULT_LAYOUT_VARIETY);
-  const [imageSize, setImageSize] = useState<ImageSize>("1K");
+  const [imageSize, setImageSize] = useState<ImageSize>("2K");
   const [imageProvider, setImageProvider] = useState<ImageProvider>(DEFAULT_IMAGE_PROVIDER);
   const [codexImageQuality, setCodexImageQuality] = useState<CodexImageQuality>(DEFAULT_CODEX_IMAGE_QUALITY);
   const [scriptDetail, setScriptDetail] = useState<ScriptDetail>("normal");
@@ -1260,7 +1260,7 @@ const App: React.FC = () => {
   const [targetPageCount, setTargetPageCount] = useState<number>(2);
   const [narrativeRole, setNarrativeRole] = useState<NarrativeRole>("narrator");
   const [characterConsistencyMode, setCharacterConsistencyMode] = useState<CharacterConsistencyMode>("loose");
-  const [useCrossPageStyleConsistency, setUseCrossPageStyleConsistency] = useState<boolean>(true);
+  const [useCrossPageStyleConsistency, setUseCrossPageStyleConsistency] = useState<boolean>(false);
   const [researchMode, setResearchMode] = useState<ResearchMode>("auto_digest");
   const [researchReportText, setResearchReportText] = useState("");
   const [researchReportFile, setResearchReportFile] = useState<File | null>(null);
@@ -1711,12 +1711,13 @@ const App: React.FC = () => {
     setToneLevel("medium");
     setLanguage("ko");
     setBusyPhase("planning");
+    setImageSize("2K");
     setImageProvider(DEFAULT_IMAGE_PROVIDER);
     setCodexImageQuality(DEFAULT_CODEX_IMAGE_QUALITY);
     setCharacterInputMode("suggest");
     setNarrativeRole("narrator");
     setCharacterConsistencyMode("loose");
-    setUseCrossPageStyleConsistency(true);
+    setUseCrossPageStyleConsistency(false);
     setResearchMode("auto_digest");
     setResearchReportText("");
     setResearchReportFile(null);
@@ -1917,7 +1918,7 @@ const App: React.FC = () => {
         ? LEARNING_NARRATIVE_ROLE
         : snapshot.narrativeRole || "narrator";
     const restoredCharacterConsistencyMode = snapshot.characterConsistencyMode || "loose";
-    const restoredUseCrossPageStyleConsistency = snapshot.useCrossPageStyleConsistency !== false;
+    const restoredUseCrossPageStyleConsistency = snapshot.useCrossPageStyleConsistency === true;
     const restoredStoryAntiEducationGuardEnabled =
       typeof snapshot.storyAntiEducationGuardEnabled === "boolean"
         ? snapshot.storyAntiEducationGuardEnabled
@@ -1948,7 +1949,7 @@ const App: React.FC = () => {
       characterConsistencyMode: restoredCharacterConsistencyMode,
       storyAntiEducationGuardEnabled: restoredStoryAntiEducationGuardEnabled
     });
-    const restoredImageSize = snapshot.imageSize || restoredPlan.series_spec.constraints.image_size || "1K";
+    const restoredImageSize = snapshot.imageSize || restoredPlan.series_spec.constraints.image_size || "2K";
     const restoredImageProvider: ImageProvider = "codex";
     const restoredCodexImageQuality: CodexImageQuality =
       snapshot.codexImageQuality ||
@@ -2534,7 +2535,7 @@ const App: React.FC = () => {
     setI2VAspectRatio(snapshot.i2vAspectRatio || "16:9");
     setNarrativeRole(snapshot.narrativeRole || "actor");
     setCharacterConsistencyMode(snapshot.characterConsistencyMode || "strict");
-    setUseCrossPageStyleConsistency(snapshot.useCrossPageStyleConsistency !== false);
+    setUseCrossPageStyleConsistency(snapshot.useCrossPageStyleConsistency === true);
     setSelectedPresetId(snapshot.selectedPresetId || "kwebtoon_clean_pastel");
     setSelectedStyleCategory(snapshot.selectedStyleCategory || "Webtoon");
     setFinalStyle(snapshot.finalStyle || null);

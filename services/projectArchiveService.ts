@@ -289,7 +289,7 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
         ? raw.geminiReasoningEffort
         : "medium",
     layoutVariety: isLayoutVariety(raw.layoutVariety) ? raw.layoutVariety : "high",
-    imageSize: isImageSize(raw.imageSize) ? raw.imageSize : "1K",
+    imageSize: isImageSize(raw.imageSize) ? raw.imageSize : "2K",
     imageProvider: isImageProvider(raw.imageProvider) ? raw.imageProvider : "codex",
     codexImageQuality: isCodexImageQuality(raw.codexImageQuality)
       ? raw.codexImageQuality
@@ -303,7 +303,7 @@ const sanitizeSnapshot = (raw: any): SavedComicProjectSnapshot | null => {
     characterConsistencyMode: isCharacterConsistencyMode(raw.characterConsistencyMode)
       ? raw.characterConsistencyMode
       : "loose",
-    useCrossPageStyleConsistency: raw.useCrossPageStyleConsistency !== false,
+    useCrossPageStyleConsistency: raw.useCrossPageStyleConsistency === true,
     researchMode: isResearchMode(raw.researchMode) ? raw.researchMode : "user",
     researchDigestText: typeof raw.researchDigestText === "string" ? raw.researchDigestText : "",
     cast: Array.isArray(raw.cast) ? (raw.cast as CharacterSpec[]) : [],

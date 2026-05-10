@@ -118,7 +118,7 @@ const sanitizeSnapshot = (raw: any): SavedLongformProjectSnapshot | null => {
       raw.i2vAspectRatio === "9:16" || raw.i2vAspectRatio === "1:1" ? raw.i2vAspectRatio : "16:9",
     narrativeRole: raw.narrativeRole === "narrator" ? "narrator" : "actor",
     characterConsistencyMode: raw.characterConsistencyMode === "loose" ? "loose" : "strict",
-    useCrossPageStyleConsistency: raw.useCrossPageStyleConsistency !== false
+    useCrossPageStyleConsistency: raw.useCrossPageStyleConsistency === true
   };
 };
 
