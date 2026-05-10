@@ -7,6 +7,7 @@ type Props = {
   compact?: boolean;
   className?: string;
   showHeader?: boolean;
+  isI2V?: boolean;
 };
 
 type DialogueKind = "speech" | "thought" | "narration";
@@ -50,6 +51,7 @@ export const PageNarrativePreview: React.FC<Props> = ({
   compact = false,
   className = "",
   showHeader = false,
+  isI2V = false,
 }) => {
   const ui = (ko: string, en: string) => uiLanguage === "ko" ? ko : en;
   const dialogueMeta: Record<DialogueKind, { label: string; chipClass: string; boxClass: string }> = {
@@ -88,6 +90,13 @@ export const PageNarrativePreview: React.FC<Props> = ({
       <div className={wrapperClass}>
         {page.panels.map((panel) => {
           const metaItems = [
+            ...(isI2V ? [
+              { label: ui("동작 단계", "Action Phase"), value: String(panel.action_phase ?? "").trim() },
+              { label: ui("연결 시작", "Continuity In"), value: String(panel.i2v_continuity_in ?? "").trim() },
+              { label: ui("시작 자세", "Start Pose"), value: String(panel.start_pose ?? "").trim() },
+              { label: ui("영상 방향", "Motion"), value: String(panel.motion_continuation ?? "").trim() },
+              { label: ui("연결 끝", "Continuity Out"), value: String(panel.i2v_continuity_out ?? "").trim() },
+            ] : []),
             { label: ui("연기", "Acting"), value: String(panel.acting ?? "").trim() },
             { label: ui("카메라", "Camera"), value: String(panel.camera ?? "").trim() },
             { label: ui("무드", "Mood"), value: String(panel.mood ?? "").trim() },

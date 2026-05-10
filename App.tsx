@@ -4,7 +4,7 @@ import { GEMINI_PLANNER_MODEL, generatePaperPlan, generatePlan, generateStoryPla
 import { translateSeriesPlan } from './services/translationService';
 import { generateFullPageImage } from './services/renderer';
 import { buildKlingI2VPromptPack } from './services/klingPrompt';
-import { getStylePresets, selectStyle } from './services/styleService';
+import { getStylePresetDisplayLabel, getStylePresets, selectStyle } from './services/styleService';
 import { analyzeResearchReport } from './services/researchService';
 import { analyzeStoryScript } from './services/storyAnalysisService';
 import { analyzePaperPdf, analyzePaperUrl } from './services/paperService';
@@ -117,6 +117,59 @@ const formatLabel = (
 ): string => {
   if (uiLanguage === "ko") return labelKo || fallback;
   return labelEn || fallback;
+};
+
+const getAudienceLevelLabel = (level: AudienceLevel, uiLanguage: UiLanguage): string => {
+  const labels: Record<AudienceLevel, { ko: string; en: string }> = {
+    kids: { ko: "어린이", en: "Kids" },
+    teen: { ko: "청소년", en: "Teens" },
+    beginner: { ko: "입문자", en: "Beginners" },
+    intermediate: { ko: "중급자", en: "Intermediate" },
+    expert: { ko: "전문가", en: "Experts" }
+  };
+  const label = labels[level];
+  return uiLanguage === "ko" ? label.ko : label.en;
+};
+
+const getAgeRatingLabel = (rating: AgeRating, uiLanguage: UiLanguage): string => {
+  const labels: Record<AgeRating, { ko: string; en: string }> = {
+    all_ages: { ko: "전체 이용가", en: "All Ages" },
+    teen: { ko: "청소년 (PG-13)", en: "Teen (PG-13)" },
+    mature: { ko: "성인", en: "Mature" }
+  };
+  const label = labels[rating];
+  return uiLanguage === "ko" ? label.ko : label.en;
+};
+
+const getStoryGenreLabel = (genre: StoryGenre, uiLanguage: UiLanguage): string => {
+  const labels: Record<StoryGenre, { ko: string; en: string }> = {
+    action: { ko: "액션", en: "Action" },
+    romance: { ko: "로맨스", en: "Romance" },
+    horror: { ko: "호러", en: "Horror" },
+    comedy: { ko: "코미디", en: "Comedy" },
+    drama: { ko: "드라마", en: "Drama" },
+    fantasy: { ko: "판타지", en: "Fantasy" },
+    sci_fi: { ko: "SF", en: "Sci-Fi" },
+    slice_of_life: { ko: "일상", en: "Slice of Life" },
+    mystery: { ko: "미스터리", en: "Mystery" }
+  };
+  const label = labels[genre];
+  return uiLanguage === "ko" ? label.ko : label.en;
+};
+
+const getDeliveryStyleLabel = (id: DeliveryStyleId | string | undefined, uiLanguage: UiLanguage): string => {
+  const labels: Record<DeliveryStyleId, { ko: string; en: string }> = {
+    standard: { ko: "일반적(표준)", en: "Natural Standard" },
+    community: { ko: "인터넷 커뮤니티 말투", en: "Online Community" },
+    friendly_banmal: { ko: "친근한 반말", en: "Casual Friendly" },
+    elder: { ko: "어르신 대상", en: "Senior-Friendly" },
+    half_honorific: { ko: "반존대", en: "Casual-Polite Mix" },
+    military: { ko: "군인 말투", en: "Military Briefing" },
+    kindergarten_teacher: { ko: "유치원 선생님", en: "Kindergarten Teacher" },
+    custom: { ko: "직접 입력(커스텀)", en: "Custom" }
+  };
+  const label = labels[(id || "standard") as DeliveryStyleId] || labels.standard;
+  return uiLanguage === "ko" ? label.ko : label.en;
 };
 
 interface HealthResponse {
@@ -2009,7 +2062,7 @@ const App: React.FC = () => {
   const deleteSavedProject = (projectId: string) => {
     const project = savedProjects.find((p) => p.id === projectId);
     if (!project) return;
-    if (!window.confirm(`"${project.label}" 프로젝트를 삭제할까요?`)) return;
+    if (!window.confirm(ui(`"${project.label}" 프로젝트를 삭제할까요?`, `Delete project "${project.label}"?`))) return;
     setSavedProjects((prev) => prev.filter((p) => p.id !== projectId));
     if (activeProjectId === projectId) setActiveProjectId("");
     if (selectedSavedProjectId === projectId) setSelectedSavedProjectId("");
@@ -2503,7 +2556,7 @@ const App: React.FC = () => {
   const deleteLongformProject = (projectId: string) => {
     const project = longformProjects.find((p) => p.id === projectId);
     if (!project) return;
-    if (!window.confirm(`"${project.label}" 장편 프로젝트를 삭제할까?`)) return;
+    if (!window.confirm(ui(`"${project.label}" 장편 프로젝트를 삭제할까?`, `Delete longform project "${project.label}"?`))) return;
     setLongformProjects((prev) => prev.filter((p) => p.id !== projectId));
     if (activeLongformProjectId === projectId) {
       setActiveLongformProjectId("");
@@ -3277,7 +3330,7 @@ const App: React.FC = () => {
   const deleteCastPreset = (presetId: string) => {
     const preset = castPresets.find((p) => p.id === presetId);
     if (!preset) return;
-    if (!window.confirm(`"${preset.label}" 프리셋을 삭제할까요?`)) return;
+    if (!window.confirm(ui(`"${preset.label}" 프리셋을 삭제할까요?`, `Delete preset "${preset.label}"?`))) return;
     setCastPresets((prev) => prev.filter((p) => p.id !== presetId));
     setSelectedCastPresetId((prev) => (prev === presetId ? "" : prev));
   };
@@ -4285,8 +4338,7 @@ const App: React.FC = () => {
     if (!plan) return "";
     const detailLevelNumeric = Number(plan.plan_meta?.detail_level);
     const detailLabel = detailLevelNumeric === 0 ? "brief" : detailLevelNumeric === 2 ? "detailed" : "normal";
-    const deliveryLabel =
-      (DELIVERY_STYLE_PRESETS.find((p) => p.id === deliveryStyleId) || DELIVERY_STYLE_PRESETS[0]).label;
+    const deliveryLabel = getDeliveryStyleLabel(deliveryStyleId, uiLanguage);
     const createdAt =
       plan.debug?.created_at ? new Date(plan.debug.created_at).toLocaleString() : "";
 
@@ -4333,7 +4385,7 @@ const App: React.FC = () => {
                 className={`px-3 py-2 text-[10px] md:text-xs font-black uppercase border-r-2 border-black ${uiLanguage === "ko" ? "bg-black text-white" : "bg-white hover:bg-slate-100"}`}
                 aria-pressed={uiLanguage === "ko"}
               >
-                한국어
+                {ui("한국어", "KO")}
               </button>
               <button
                 type="button"
@@ -4425,6 +4477,7 @@ const App: React.FC = () => {
           open={pageScriptEditorOpen}
           page={pageScriptDraft}
           uiLanguage={uiLanguage}
+          isI2V={isI2VSelected}
           isBusy={status === AppStatus.GENERATING_PANELS}
           onClose={closePageScriptEditor}
           onChange={(next) => setPageScriptDraft(next)}
@@ -4488,7 +4541,7 @@ const App: React.FC = () => {
             <h2 className="text-2xl md:text-3xl font-black mb-6 md:mb-8 border-l-8 border-blue-600 pl-4 uppercase">{ui("03. 캐릭터 설정", "03. Setup Character")}</h2>
             <div className="mb-8 border-2 border-blue-600 bg-blue-50 px-4 py-3 text-[10px] md:text-xs font-black text-blue-900 uppercase flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <span>{ui("선택된 그림체", "Selected Style")}</span>
-              <span>{selectedStylePresetForDisplay?.label || selectedPresetId}</span>
+	              <span>{selectedStylePresetForDisplay ? getStylePresetDisplayLabel(selectedStylePresetForDisplay, uiLanguage) : selectedPresetId}</span>
             </div>
 
             <div className="mb-8 border-2 border-indigo-600 bg-indigo-50 p-4">
@@ -5012,7 +5065,7 @@ const App: React.FC = () => {
                     {/* GRID */}
                     {filteredPresets.map(p => (
                       <div key={p.id} onClick={() => setSelectedPresetId(p.id)} className={`p-4 md:p-6 border-4 cursor-pointer transition-all flex flex-col h-full ${selectedPresetId === p.id ? 'border-blue-600 bg-blue-50 scale-[1.02] shadow-md' : 'border-black hover:bg-slate-50'}`}>
-                        <h3 className={`font-black text-xs md:text-sm mb-2 uppercase ${selectedPresetId === p.id ? "text-blue-700" : "text-black"}`}>{p.label}</h3>
+	                        <h3 className={`font-black text-xs md:text-sm mb-2 uppercase ${selectedPresetId === p.id ? "text-blue-700" : "text-black"}`}>{getStylePresetDisplayLabel(p, uiLanguage)}</h3>
                         {selectedPresetId === p.id && (
                           <div className="mt-3 flex justify-end">
                             <CheckCircle2 size={16} className="text-blue-600" />
@@ -5211,7 +5264,7 @@ const App: React.FC = () => {
               {productionMode === "single" && (
               <div className="mb-8 p-6 bg-slate-50 border-2 border-black">
                 <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("제작 유형", "Creation Type")}</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       enterSingleMode();
@@ -5237,20 +5290,6 @@ const App: React.FC = () => {
                     className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "story" ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                   >
                     {ui("스토리/창작", "Story")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      enterSingleMode();
-                      setCreationType("paper");
-                      setNarrativeRole(getDefaultNarrativeRole("paper"));
-                      setPublicationFormat(getDefaultPublicationFormat("paper"));
-                      setToneMode("normal");
-                      setToneLevel("medium");
-                      setLayoutVariety(DEFAULT_LAYOUT_VARIETY);
-                    }}
-                    className={`py-3 border-2 border-black font-black text-xs uppercase transition-colors ${creationType === "paper" ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white hover:bg-slate-100'}`}
-                  >
-                    {ui("논문 만화", "Paper Comic")}
                   </button>
                 </div>
               </div>
@@ -5362,31 +5401,31 @@ const App: React.FC = () => {
                     onClick={() => setAudienceLevel("kids")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === "kids" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    Kids
+	                    {getAudienceLevelLabel("kids", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAudienceLevel("teen")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === "teen" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    Teen
+	                    {getAudienceLevelLabel("teen", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAudienceLevel("beginner")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === "beginner" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    Beginner
+	                    {getAudienceLevelLabel("beginner", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAudienceLevel("intermediate")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === "intermediate" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    Intermediate
+	                    {getAudienceLevelLabel("intermediate", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAudienceLevel("expert")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === "expert" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    Expert
+	                    {getAudienceLevelLabel("expert", uiLanguage)}
                   </button>
                 </div>
               </div>
@@ -5463,7 +5502,7 @@ const App: React.FC = () => {
                     className={`px-4 py-2 text-xs font-black transition-colors flex items-center gap-2 disabled:opacity-50 ${storyAdaptationMode === "analyzed" && storyDigestText ? "bg-violet-700 text-white" : "bg-violet-600 text-white hover:bg-violet-700"}`}
                   >
                     {isStoryAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles size={14} />}
-	                    AI 각색
+		                    {ui("AI 각색", "AI Adapt")}
                   </button>
                   <button
                     onClick={handleUseStoryAsIs}
@@ -5472,14 +5511,14 @@ const App: React.FC = () => {
                     className={`px-4 py-2 text-xs font-black border-2 border-black transition-colors flex items-center gap-2 disabled:opacity-50 ${storyAdaptationMode === "direct" ? "bg-black text-white" : "bg-white text-black hover:bg-slate-100"}`}
                   >
                     <CheckCircle2 size={14} />
-                    이대로 사용
+	                    {ui("이대로 사용", "Use As Is")}
                   </button>
                   {storyDigestText && (
                     <button
                       onClick={() => { setStoryAdaptationMode("analyzed"); setStoryDigestText(""); setStoryDigestWarnings([]); setStoryPageSuggestions(null); setStoryDigestError(null); }}
                       className="text-[10px] font-black text-slate-400 hover:text-red-500 uppercase"
                     >
-                      초기화
+	                      {ui("초기화", "Reset")}
                     </button>
                   )}
                 </div>
@@ -5494,7 +5533,7 @@ const App: React.FC = () => {
                   </p>
                 )}
                 {storyDigestError && (
-                  <p className="text-[10px] font-black text-red-600 mt-2">AI 각색 오류: {storyDigestError}</p>
+	                  <p className="text-[10px] font-black text-red-600 mt-2">{ui("AI 각색 오류", "AI adaptation error")}: {storyDigestError}</p>
                 )}
                 {storyDigestWarnings.length > 0 && (
                   <div className="border-2 border-yellow-400 bg-yellow-50 p-3 mt-3">
@@ -5733,19 +5772,19 @@ const App: React.FC = () => {
                     onClick={() => setAgeRating("all_ages")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${ageRating === "all_ages" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    전체 이용가
+	                    {getAgeRatingLabel("all_ages", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAgeRating("teen")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${ageRating === "teen" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    청소년 (PG-13)
+	                    {getAgeRatingLabel("teen", uiLanguage)}
                   </button>
                   <button
                     onClick={() => setAgeRating("mature")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${ageRating === "mature" ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    성인
+	                    {getAgeRatingLabel("mature", uiLanguage)}
                   </button>
                 </div>
               </div>
@@ -5777,9 +5816,7 @@ const App: React.FC = () => {
                       onClick={() => setStoryGenre(storyGenre === g ? null : g)}
                       className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${storyGenre === g ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-100'}`}
                     >
-                      {uiLanguage === "ko"
-                        ? (g === "sci_fi" ? "SF" : g === "slice_of_life" ? "일상" : g === "action" ? "액션" : g === "romance" ? "로맨스" : g === "horror" ? "호러" : g === "comedy" ? "코미디" : g === "drama" ? "드라마" : g === "fantasy" ? "판타지" : "미스터리")
-                        : (g === "sci_fi" ? "Sci-Fi" : g === "slice_of_life" ? "Slice of Life" : g.replace("_", " "))}
+	                      {getStoryGenreLabel(g, uiLanguage)}
                     </button>
                   ))}
                 </div>
@@ -5821,7 +5858,7 @@ const App: React.FC = () => {
                           onClick={() => setAudienceLevel(level)}
                           className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${audienceLevel === level ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white hover:bg-slate-100'}`}
                         >
-                          {level}
+	                          {getAudienceLevelLabel(level, uiLanguage)}
                         </button>
                       ))}
                     </div>
@@ -5991,12 +6028,12 @@ const App: React.FC = () => {
                     onClick={() => setToneMode("gag")}
                     className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${toneMode === "gag" ? 'bg-yellow-300 text-black' : 'bg-white hover:bg-slate-100'}`}
                   >
-                    {ui("개그", "Gag")}
+                    {ui("개그", "Humor")}
                   </button>
                 </div>
                 {toneMode === "gag" && (
                   <div className="mt-3">
-                    <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("개그 강도", "Gag Level")}</p>
+                    <p className="text-[10px] font-black uppercase text-slate-600 mb-2">{ui("개그 강도", "Humor Level")}</p>
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         onClick={() => setToneLevel("low")}
@@ -6030,13 +6067,13 @@ const App: React.FC = () => {
                       <button
                         key={p.id}
                         onClick={() => setDeliveryStyleId(p.id)}
-                        title={p.label}
+	                        title={getDeliveryStyleLabel(p.id, uiLanguage)}
                         className={`py-2 border-2 font-black text-[10px] uppercase transition-colors ${deliveryStyleId === p.id
                           ? "border-blue-600 bg-blue-50 text-blue-700"
                           : "border-black bg-white hover:bg-slate-100"
                         }`}
                       >
-                        {p.label}
+	                        {getDeliveryStyleLabel(p.id, uiLanguage)}
                       </button>
                     );
                   })}
@@ -6304,7 +6341,7 @@ const App: React.FC = () => {
                       className={`py-2 border-2 border-black font-black text-[10px] uppercase transition-colors ${language === "ko" ? "bg-black text-white" : "bg-white hover:bg-slate-100"
                         }`}
                     >
-                      한국어
+	                      {ui("한국어", "Korean")}
                     </button>
                     <button
                       onClick={() => setLanguage("en")}
@@ -6429,7 +6466,7 @@ const App: React.FC = () => {
                   {ui("결과물 언어", "Output Language")}: {seriesPlan.series_spec.series.language === "en" ? "EN" : "KO"}
                 </div>
                 <div className="inline-block bg-white text-black border-2 border-black px-2 py-1 text-[10px] font-black uppercase">
-                  {ui("말투", "Tone")}: {(DELIVERY_STYLE_PRESETS.find((p) => p.id === deliveryStyleId) || DELIVERY_STYLE_PRESETS[0]).label}
+	                  {ui("말투", "Tone")}: {getDeliveryStyleLabel(deliveryStyleId, uiLanguage)}
                 </div>
               </div>
             </div>
@@ -6639,7 +6676,7 @@ const App: React.FC = () => {
                             disabled={status === AppStatus.GENERATING_PANELS}
                             className={`py-2 border-2 border-black text-[10px] font-black uppercase ${seriesPlan.series_spec.series.language === "ko" ? "bg-black text-white" : "bg-white hover:bg-slate-100"} ${status === AppStatus.GENERATING_PANELS ? "opacity-50 cursor-not-allowed" : ""}`}
                           >
-                            한국어
+	                            {ui("한국어", "Korean")}
                           </button>
                           <button
                             onClick={() => switchPlanLanguage("en")}
@@ -7021,7 +7058,7 @@ const App: React.FC = () => {
 
 	                          {showNarrativeText ? (
                             <div className="mt-3 border-t-2 border-dashed border-black pt-3">
-                              <PageNarrativePreview page={p} compact uiLanguage={uiLanguage} />
+                              <PageNarrativePreview page={p} compact uiLanguage={uiLanguage} isI2V={isI2VSelected} />
                             </div>
                           ) : null}
                         </div>
@@ -7294,7 +7331,7 @@ const App: React.FC = () => {
                           <p className="text-xs font-bold leading-tight line-clamp-3 italic text-slate-700">"{p.page.chapter_title}"</p>
                           {showNarrativeText ? (
                             <div className="mt-3">
-                              <PageNarrativePreview page={p} compact uiLanguage={uiLanguage} />
+                              <PageNarrativePreview page={p} compact uiLanguage={uiLanguage} isI2V={isI2VSelected} />
                             </div>
                           ) : null}
                           {klingPromptPack ? (

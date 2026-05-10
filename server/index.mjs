@@ -12,6 +12,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const PORT = Number.parseInt(process.env.LOCAL_API_PORT || process.env.PORT || "8787", 10);
+const HOST = String(process.env.LOCAL_API_HOST || process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
 const JSON_LIMIT = process.env.LOCAL_API_JSON_LIMIT || "50mb";
 const PROJECT_ARCHIVE_PATH = path.resolve(
   process.env.LOCAL_PROJECT_ARCHIVE_PATH || path.join(process.cwd(), "local-project-archive", "projects.json")
@@ -899,7 +900,11 @@ app.post("/api/gemini/generate-content", async (req, res) => {
 
 startCodexOAuthProxy();
 
-app.listen(PORT, () => {
-  console.log(`[local-api] listening on http://127.0.0.1:${PORT}`);
+app.listen(PORT, HOST, () => {
+  const displayedHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
+  if (!["127.0.0.1", "localhost", "::1"].includes(HOST)) {
+    console.warn(`[local-api] warning: API is bound to ${HOST}. Use LOCAL_API_HOST=127.0.0.1 for local-only access.`);
+  }
+  console.log(`[local-api] listening on http://${displayedHost}:${PORT}`);
   console.log(`[local-api] Codex OAuth: ${CODEX_OAUTH_AUTOSTART ? "auto" : "manual"} on ${CODEX_OAUTH_URL}`);
 });

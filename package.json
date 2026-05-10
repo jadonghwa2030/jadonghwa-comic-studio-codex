@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "security:check": "node scripts/security-check.mjs",
     "dev": "concurrently -n api,web -c green,cyan \"node --watch server/index.mjs\" \"vite\"",
     "dev:web": "vite",
     "dev:api": "node --watch server/index.mjs",

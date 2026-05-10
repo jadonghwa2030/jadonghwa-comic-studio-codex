@@ -6,6 +6,7 @@ type Props = {
   open: boolean;
   page: PageSpec | null;
   uiLanguage?: "ko" | "en";
+  isI2V?: boolean;
   isBusy?: boolean;
   onClose: () => void;
   onChange: (next: PageSpec) => void;
@@ -17,6 +18,7 @@ export const PageScriptEditorModal: React.FC<Props> = ({
   open,
   page,
   uiLanguage = "ko",
+  isI2V = false,
   isBusy,
   onClose,
   onChange,
@@ -25,6 +27,15 @@ export const PageScriptEditorModal: React.FC<Props> = ({
 }) => {
   if (!open || !page) return null;
   const ui = (ko: string, en: string) => uiLanguage === "ko" ? ko : en;
+  const actionPhaseOptions = [
+    ["setup", ui("준비", "Setup")],
+    ["anticipation", ui("동작 직전", "Anticipation")],
+    ["mid_action", ui("동작 중", "Mid-action")],
+    ["impact", ui("임팩트", "Impact")],
+    ["follow_through", ui("동작 직후", "Follow-through")],
+    ["reaction", ui("반응", "Reaction")],
+    ["hold", ui("정지", "Hold")]
+  ];
 
   const updateTitle = (chapter_title: string) => {
     onChange({ ...page, page: { ...page.page, chapter_title } });
@@ -101,10 +112,67 @@ export const PageScriptEditorModal: React.FC<Props> = ({
                     CUT {panel.index}
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 mt-2">
-                    {ui("이 컷의 상황/연기/카메라/무드/대사를 직접 다듬어줘.", "Fine-tune the scene, acting, camera, mood, and dialogue for this cut.")}
+                    {isI2V
+                      ? ui("영상 시작점의 자세와 이어질 움직임을 직접 다듬어줘.", "Fine-tune the start pose and motion for this frame.")
+                      : ui("이 컷의 상황/연기/카메라/무드/대사를 직접 다듬어줘.", "Fine-tune the scene, acting, camera, mood, and dialogue for this cut.")}
                   </p>
                 </div>
               </div>
+
+              {isI2V ? (
+                <div className="mb-4 bg-blue-50 border-2 border-black p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-blue-700 mb-2">{ui("동작 단계", "Action Phase")}</label>
+                      <select
+                        value={String(panel.action_phase ?? "hold")}
+                        onChange={(e) => updatePanel(panel.index, { action_phase: e.target.value })}
+                        className="w-full px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50"
+                      >
+                        {actionPhaseOptions.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-black uppercase text-blue-700 mb-2">{ui("시작 자세", "Start Pose")}</label>
+                      <textarea
+                        value={String(panel.start_pose ?? "")}
+                        onChange={(e) => updatePanel(panel.index, { start_pose: e.target.value })}
+                        className="w-full min-h-[76px] px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50 resize-y"
+                        placeholder={ui("첫 프레임에 정확히 보여야 하는 자세", "Exact pose that must appear in the first frame")}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-[10px] font-black uppercase text-blue-700 mb-2">{ui("연결 시작", "Continuity In")}</label>
+                    <textarea
+                      value={String(panel.i2v_continuity_in ?? "")}
+                      onChange={(e) => updatePanel(panel.index, { i2v_continuity_in: e.target.value })}
+                      className="w-full min-h-[76px] px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50 resize-y"
+                      placeholder={ui("이전 클립 끝에서 이어받을 위치, 시선, 소품, 감정", "Position, gaze, props, and emotion inherited from the previous clip")}
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-[10px] font-black uppercase text-blue-700 mb-2">{ui("영상 방향", "Motion Continuation")}</label>
+                    <textarea
+                      value={String(panel.motion_continuation ?? "")}
+                      onChange={(e) => updatePanel(panel.index, { motion_continuation: e.target.value })}
+                      className="w-full min-h-[76px] px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50 resize-y"
+                      placeholder={ui("이 프레임 이후 5~8초 동안 이어질 움직임", "Motion that should continue for the next 5-8 seconds")}
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-[10px] font-black uppercase text-blue-700 mb-2">{ui("연결 끝", "Continuity Out")}</label>
+                    <textarea
+                      value={String(panel.i2v_continuity_out ?? "")}
+                      onChange={(e) => updatePanel(panel.index, { i2v_continuity_out: e.target.value })}
+                      className="w-full min-h-[76px] px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50 resize-y"
+                      placeholder={ui("다음 클립이 이어받을 끝 자세, 시선, 소품, 감정", "Ending pose, gaze, props, and emotion for the next clip")}
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -151,7 +219,9 @@ export const PageScriptEditorModal: React.FC<Props> = ({
 
               <div className="mt-5 bg-slate-50 border-2 border-black p-4">
                 <div className="flex items-center justify-between gap-4 mb-3">
-                  <label className="block text-[10px] font-black uppercase text-slate-500">{ui("말풍선 대사", "Speech Bubble Lines")}</label>
+                  <label className="block text-[10px] font-black uppercase text-slate-500">
+                    {isI2V ? ui("음성 대사", "Voice Lines") : ui("말풍선 대사", "Speech Bubble Lines")}
+                  </label>
                   <button
                     type="button"
                     onClick={() => addDialogue(panel.index)}
@@ -173,7 +243,7 @@ export const PageScriptEditorModal: React.FC<Props> = ({
                           value={String(line ?? "")}
                           onChange={(e) => updateDialogue(panel.index, idx, e.target.value)}
                           className="flex-1 px-3 py-2 text-xs font-bold border-2 border-black bg-white outline-none focus:bg-yellow-50"
-                          placeholder={ui("말풍선에 들어갈 문장", "Text for the speech bubble")}
+                          placeholder={isI2V ? ui("예) 주인공: 지금 시작하자", "Example: Protagonist: Let's begin") : ui("말풍선에 들어갈 문장", "Text for the speech bubble")}
                         />
                         <button
                           type="button"

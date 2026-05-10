@@ -63,6 +63,9 @@ export const translateSeriesPlan = async (params: {
         panel_index: panel.index,
         scene: String(panel.scene || ""),
         acting: String(panel.acting || ""),
+        action_phase: String(panel.action_phase || ""),
+        start_pose: String(panel.start_pose || ""),
+        motion_continuation: String(panel.motion_continuation || ""),
         dialogues: Array.isArray(panel.dialogues) ? panel.dialogues.map((d) => String(d || "")) : [],
         camera: String(panel.camera || ""),
         mood: String(panel.mood || "")
@@ -80,7 +83,7 @@ Rules (critical):
 - If a dialogue line starts with [thought] or [narration], keep that exact prefix verbatim at the START of the translated line and translate only the remaining text.
 - Do NOT invent, remove, or replace [thought]/[narration] prefixes.
 ${isKlingI2V
-      ? '- Dialogues are voice lines for i2v. Preserve speaker labels if already present (e.g., "주인공: ...").'
+      ? '- Dialogues are voice lines for i2v. Preserve speaker labels if already present (e.g., "주인공: ..."). Translate start_pose and motion_continuation, but keep action_phase as one of the original enum values.'
       : '- Do NOT insert speaker names like "Narrator:" or "주인공:" into dialogues.'}
 - Output must be a single JSON object that follows the provided schema (no markdown).`;
 
@@ -117,6 +120,9 @@ ${JSON.stringify(payload)}
                         panel_index: { type: Type.INTEGER },
                         scene: { type: Type.STRING },
                         acting: { type: Type.STRING },
+                        action_phase: { type: Type.STRING },
+                        start_pose: { type: Type.STRING },
+                        motion_continuation: { type: Type.STRING },
                         dialogues: { type: Type.ARRAY, items: { type: Type.STRING } },
                         camera: { type: Type.STRING },
                         mood: { type: Type.STRING }
@@ -167,6 +173,9 @@ ${JSON.stringify(payload)}
           ...p,
           scene: typeof t.scene === "string" ? t.scene : p.scene,
           acting: typeof t.acting === "string" ? t.acting : p.acting,
+          action_phase: typeof t.action_phase === "string" ? t.action_phase : p.action_phase,
+          start_pose: typeof t.start_pose === "string" ? t.start_pose : p.start_pose,
+          motion_continuation: typeof t.motion_continuation === "string" ? t.motion_continuation : p.motion_continuation,
           dialogues: Array.isArray(t.dialogues)
             ? t.dialogues.map((d: any, index: number) => restoreDialoguePrefix(p.dialogues[index] || "", d))
             : p.dialogues,

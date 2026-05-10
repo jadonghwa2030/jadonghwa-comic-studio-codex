@@ -62,7 +62,7 @@ Check backend health:
 http://127.0.0.1:8787/api/health
 ```
 
-`npm run dev` starts both the local backend and the Vite frontend. The backend defaults to port `8787`; Vite defaults to port `3000`; the Codex OAuth proxy defaults to port `10531`.
+`npm run dev` starts both the local backend and the Vite frontend. The backend defaults to port `8787`; Vite defaults to port `3000`; the Codex OAuth proxy defaults to port `10531`. By default, the local API and Vite dev server bind to `127.0.0.1`.
 
 ## Set This Up With Codex
 
@@ -90,6 +90,7 @@ Important `.env.example` values:
 
 - `CODEX_OAUTH_PROXY_PORT=10531`
 - `LOCAL_API_PORT=8787`
+- `LOCAL_API_HOST=127.0.0.1`
 - `GEMINI_TEXT_MODEL=gemini-3-pro-preview`
 - `GEMINI_API_KEY=...` in `.env.local`
 - `CODEX_IMAGE_MODEL=gpt-5.4-mini`
@@ -161,6 +162,8 @@ For a one-off frontend port change:
 npm run dev:web -- --host 0.0.0.0 --port 3002
 ```
 
+Only use `--host 0.0.0.0` or `LOCAL_API_HOST=0.0.0.0` on a trusted network. The app can handle private prompts, uploaded source material, local project archives, and your local Codex OAuth session.
+
 Run the API separately if needed:
 
 ```bash
@@ -179,6 +182,7 @@ This repository is being prepared for public release, but a few things should be
 - Decide and add `LICENSE` or `LICENSE.md`
 - Run a clean clone setup test
 - Confirm `.env.local`, local archives, generated exports, and private source files are ignored
+- Run `npm run security:check`
 - Re-read this README from the perspective of a first-time user
 
 ## Security Notes
@@ -188,3 +192,4 @@ This repository is being prepared for public release, but a few things should be
 - Never commit generated private user materials
 - Never commit `local-project-archive/`
 - Treat uploaded papers, generated pages, and project archives as local/private user data
+- Keep the local API bound to `127.0.0.1` unless you intentionally expose it on a trusted LAN

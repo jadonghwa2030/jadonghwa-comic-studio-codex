@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw, Save, Wand2, X, CheckCircle2 } from "lucide-react";
 import type { SeriesSpec, StylePreset } from "../types";
-import { selectStyle } from "../services/styleService";
+import { getStylePresetDisplayLabel, selectStyle } from "../services/styleService";
 import { readImageFileAsCompressedDataUrl } from "../services/imageDataUrl";
 
 type ApplyScope = "page" | "all";
@@ -35,7 +35,8 @@ export const PageStyleEditorModal: React.FC<Props> = ({
   onSave
 }) => {
   const canRender = open && pageIndex && initialStyle;
-  const ui = (ko: string, en: string) => uiLanguage === "ko" ? ko : en;
+  const resolvedUiLanguage: "ko" | "en" = uiLanguage === "en" ? "en" : "ko";
+  const ui = (ko: string, en: string) => resolvedUiLanguage === "ko" ? ko : en;
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [styleReferenceImage, setStyleReferenceImage] = useState<string | null>(null);
   const [styleReferenceError, setStyleReferenceError] = useState<string | null>(null);
@@ -222,7 +223,7 @@ export const PageStyleEditorModal: React.FC<Props> = ({
                         }`}
                     >
                       <h4 className={`font-black text-xs md:text-sm mb-2 uppercase ${selectedPresetId === p.id ? "text-blue-700" : "text-black"}`}>
-                        {p.label}
+                        {getStylePresetDisplayLabel(p, resolvedUiLanguage)}
                       </h4>
                       <div className="flex-1">
                         <p className="text-[10px] font-bold text-slate-500 leading-tight">

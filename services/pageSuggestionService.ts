@@ -6,6 +6,26 @@ export interface NarrativePageSuggestionResult {
   page_division_note: string;
 }
 
+const estimateMinimumPageSuggestions = (text: string): Record<ScriptDetail, number> => {
+  const normalized = String(text || "").trim();
+  const nonSpaceChars = normalized.replace(/\s/g, "").length;
+  const paragraphs = normalized
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 20).length;
+  const sentenceLikeBreaks = normalized
+    .split(/[.!?。！？]\s+|\n+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 30).length;
+  const learningBeats = Math.max(paragraphs, Math.ceil(sentenceLikeBreaks / 2));
+
+  return {
+    brief: Math.max(1, Math.ceil(learningBeats / 3), Math.ceil(nonSpaceChars / 1800)),
+    normal: Math.max(2, Math.ceil(learningBeats / 2), Math.ceil(nonSpaceChars / 1200)),
+    detailed: Math.max(3, Math.ceil(learningBeats * 0.75), Math.ceil(nonSpaceChars / 800))
+  };
+};
+
 export const suggestNarrativePageCounts = async (params: {
   narrative_text: string;
   subject?: string;
@@ -25,6 +45,9 @@ export const suggestNarrativePageCounts = async (params: {
           text: `다음 원고를 만화 페이지로 나누려 한다.
 
 주제: ${String(params.subject || "").trim() || "unspecified"}
+원고 길이 참고:
+- 공백 제외 글자 수: ${narrative.replace(/\s/g, "").length}
+- 문단 수: ${narrative.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean).length}
 
 원고:
 ${narrative.slice(0, 60000)}
@@ -60,11 +83,12 @@ ${narrative.slice(0, 60000)}
   });
 
   const json = JSON.parse(response.text.match(/\{[\s\S]*\}/)?.[0] || response.text);
+  const minimums = estimateMinimumPageSuggestions(narrative);
   return {
     page_suggestions: {
-      brief: Math.max(1, Math.floor(Number(json.page_suggestions?.brief || 1))),
-      normal: Math.max(1, Math.floor(Number(json.page_suggestions?.normal || 2))),
-      detailed: Math.max(1, Math.floor(Number(json.page_suggestions?.detailed || 3)))
+      brief: Math.max(minimums.brief, Math.floor(Number(json.page_suggestions?.brief || 1))),
+      normal: Math.max(minimums.normal, Math.floor(Number(json.page_suggestions?.normal || 2))),
+      detailed: Math.max(minimums.detailed, Math.floor(Number(json.page_suggestions?.detailed || 3)))
     },
     page_division_note: String(json.page_division_note || "").trim()
   };

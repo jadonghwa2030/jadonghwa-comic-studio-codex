@@ -15,6 +15,15 @@ dist-ssr
 !.env.example
 *.local
 local-project-archive/
+exports/
+outputs/
+uploads/
+generated/
+coverage/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
 
 # Editor directories and files
 .vscode/*

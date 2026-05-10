@@ -63,7 +63,7 @@ export const DevPromptCheckModal: React.FC<Props> = ({ open, plan, settingsSumma
 
   const copyText = useMemo(() => {
     const lines: string[] = [];
-    lines.push("[설정 요약]");
+    lines.push(uiLanguage === "ko" ? "[설정 요약]" : "[SETTINGS SUMMARY]");
     lines.push(settingsSummary.trim() || "(empty)");
     lines.push("");
 
@@ -92,7 +92,7 @@ export const DevPromptCheckModal: React.FC<Props> = ({ open, plan, settingsSumma
     }
 
     return lines.join("\n");
-  }, [contentsPreview, debug, includeSources, resultJsonPreview, settingsSummary, sources]);
+  }, [contentsPreview, debug, includeSources, resultJsonPreview, settingsSummary, sources, uiLanguage]);
 
   const handleCopy = async () => {
     setCopied(false);
@@ -178,7 +178,7 @@ export const DevPromptCheckModal: React.FC<Props> = ({ open, plan, settingsSumma
 
           <details open className="border-2 border-black bg-white">
             <summary className="cursor-pointer select-none px-4 py-3 font-black text-xs uppercase bg-slate-100 border-b-2 border-black">
-              [설정 요약]
+              {ui("설정 요약", "Settings Summary")}
             </summary>
             <pre className="p-4 text-[11px] whitespace-pre-wrap font-mono">{settingsSummary.trim() || "(empty)"}</pre>
           </details>

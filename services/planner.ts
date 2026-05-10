@@ -50,6 +50,48 @@ const LEARNING_LAYOUT_DENSITIES: LearningLayoutDensity[] = ["simple", "balanced"
 const LEARNING_LAYOUT_ROLE_DOC = LEARNING_LAYOUT_ROLES.join("|");
 const LEARNING_LAYOUT_FLOW_DOC = LEARNING_LAYOUT_FLOWS.join("|");
 const LEARNING_LAYOUT_DENSITY_DOC = LEARNING_LAYOUT_DENSITIES.join("|");
+const I2V_ACTION_PHASE_DOC = "setup|anticipation|mid_action|impact|follow_through|reaction|hold";
+const I2V_PANEL_MOTION_SCHEMA_PROPERTIES = {
+  action_phase: {
+    type: Type.STRING,
+    description: `I2V only. 영상 시작 프레임의 동작 단계. 반드시 ${I2V_ACTION_PHASE_DOC} 중 하나.`
+  },
+  start_pose: {
+    type: Type.STRING,
+    description: "I2V only. 첫 이미지에 반드시 보여야 하는 정확한 정지 자세/손 위치/시선/물체 위치."
+  },
+  motion_continuation: {
+    type: Type.STRING,
+    description: "I2V only. 이 첫 프레임 이후 5~8초 영상에서 이어질 움직임."
+  },
+  i2v_continuity_in: {
+    type: Type.STRING,
+    description: "I2V only. 이전 클립의 끝에서 이번 시작 프레임으로 반드시 이어받아야 할 시각 상태. 1페이지는 도입 기준 상태."
+  },
+  i2v_continuity_out: {
+    type: Type.STRING,
+    description: "I2V only. 이번 클립이 끝날 때 다음 프레임이 이어받아야 할 시각 상태."
+  }
+};
+const I2V_MOTION_TIMING_INSTRUCTION = `
+[I2V 모션 타이밍 - 매우 중요]
+- 각 프레임은 "영상 시작점"으로 사용할 정확한 정지 포즈입니다. 단순히 움직임을 설명하지 말고, 그 동작의 어느 순간에서 영상이 시작되는지 정하세요.
+- action_phase는 ${I2V_ACTION_PHASE_DOC} 중 하나로 작성하세요.
+  - setup: 동작 전 준비/대기
+  - anticipation: 동작 직전의 장전된 자세
+  - mid_action: 이미 움직임이 진행 중인 순간
+  - impact: 접촉/타격/결정적 순간
+  - follow_through: 동작 직후의 여운
+  - reaction: 결과를 보고 반응하는 순간
+  - hold: 정지/응시/호흡을 유지하는 순간
+- start_pose에는 첫 이미지에 반드시 보여야 하는 몸의 자세, 손 위치, 시선, 물체 위치를 구체적으로 쓰세요.
+- motion_continuation에는 이 이미지 이후 5~8초 영상이 어떻게 움직여야 하는지 쓰세요.
+- i2v_continuity_in에는 이전 클립 끝에서 이어받는 위치/시선/손의 물체/감정/카메라 방향을 구체적으로 쓰세요. 1페이지는 "도입 시작 상태"로 작성하세요.
+- i2v_continuity_out에는 이번 클립 끝에서 다음 클립이 이어받을 위치/시선/손의 물체/감정/카메라 방향을 구체적으로 쓰세요.
+- 2페이지 이후의 start_pose는 이전 페이지의 i2v_continuity_out과 충돌하면 안 됩니다. 장소/복장/소품/인물 거리/시선 방향이 갑자기 바뀌는 하드컷은 금지입니다.
+- 의도적인 시간 점프/장소 전환이 꼭 필요하면 i2v_continuity_in에 "명시적 전환"이라고 적고, scene/camera에 전환 이유를 보이게 하세요.
+- 예: 골프 스윙이면 anticipation=start_pose "백스윙 최고점, 클럽이 머리 뒤로 크게 올라가고 몸통이 꼬인 자세", motion_continuation "다운스윙으로 전환해 공을 강하게 친다".
+- 매 프레임의 action_phase를 장면 기능에 맞게 다르게 설계하세요. 모든 프레임을 mid_action으로 만들지 마세요.`;
 const WEBTOON_STATIC_ANCHOR_TEMPLATE_IDS = [
   "webtoon_hero_stack",
   "webtoon_stack_3",
@@ -1913,10 +1955,14 @@ ${isActionTopic
 [시나리오 철학: Kling I2V Storyboard]
 1. 한 페이지는 하나의 핵심 프레임(1컷)입니다.
 2. 페이지 간 연결로 도입 → 긴장 → 전환 → 결말의 리듬을 설계하세요.
-3. 각 프레임에서 scene/acting/camera/mood를 구체적으로 작성하세요.
-4. dialogues는 화면 텍스트가 아니라 "음성 대사" 기준으로 0~2줄의 짧은 구어체로 작성하세요.
-5. dialogues는 화자 포함 형식을 권장합니다. (예: "주인공: 지금 시작하자")
-6. 자막/화면 텍스트/말풍선 지시를 dialogues에 넣지 마세요.`;
+3. 각 프레임에서 scene/acting/camera/mood와 action_phase/start_pose/motion_continuation을 구체적으로 작성하세요.
+4. start_pose는 이미지 생성의 기준이고, motion_continuation은 영상화 방향입니다. 둘을 섞지 마세요.
+5. i2v_continuity_in/out은 클립 사이의 바통입니다. 이전 클립의 끝 자세/시선/소품/감정/카메라 방향을 다음 시작 프레임에 물려주세요.
+6. 장면마다 새로 세팅하지 말고, 가능한 한 직전 프레임의 결과에서 "한 동작 더 진행된 순간"으로 시작하세요.
+7. dialogues는 화면 텍스트가 아니라 "음성 대사" 기준으로 0~2줄의 짧은 구어체로 작성하세요.
+8. dialogues는 화자 포함 형식을 권장합니다. (예: "주인공: 지금 시작하자")
+9. 자막/화면 텍스트/말풍선 지시를 dialogues에 넣지 마세요.
+${I2V_MOTION_TIMING_INSTRUCTION}`;
 
   const frameworkInstructionWebtoon = `
 
@@ -2339,6 +2385,7 @@ ${dialoguePromptRule}`;
     properties: {
       scene: { type: Type.STRING, description: "주인공의 역할에 기반한 구체적인 장면 묘사" },
       acting: { type: Type.STRING, description: "주인공의 제스처/표정/몸짓(말투 프리셋에 맞춘 연기 지시). dialogues에는 넣지 말고 여기에만 작성." },
+      ...(isKlingI2V ? I2V_PANEL_MOTION_SCHEMA_PROPERTIES : {}),
       dialogues: {
         type: Type.ARRAY,
         items: { type: Type.STRING },
@@ -2350,7 +2397,9 @@ ${dialoguePromptRule}`;
       mood: { type: Type.STRING },
       target_aspect_ratio: { type: Type.STRING }
     },
-    required: ["scene", "acting", "dialogues", "target_aspect_ratio"]
+    required: isKlingI2V
+      ? ["scene", "acting", "action_phase", "start_pose", "motion_continuation", "i2v_continuity_in", "i2v_continuity_out", "dialogues", "target_aspect_ratio"]
+      : ["scene", "acting", "dialogues", "target_aspect_ratio"]
   };
 
   const webtoonLayoutSchema = {
@@ -2537,6 +2586,48 @@ ${dialoguePromptRule}`;
     return Array.from(dedup.values());
   };
 
+  const buildSourceUnits = (text: string): string[] => {
+    const paragraphs = text
+      .split(/\n\s*\n+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (paragraphs.length >= Math.min(targetPageCount, 4)) return paragraphs;
+
+    const sentenceUnits = text
+      .split(/(?<=[.!?。！？])\s+|\n+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 20);
+    if (sentenceUnits.length <= paragraphs.length) return paragraphs;
+
+    const units: string[] = [];
+    let buffer = "";
+    for (const sentence of sentenceUnits) {
+      const next = buffer ? `${buffer} ${sentence}` : sentence;
+      if (next.length > 700 && buffer) {
+        units.push(buffer);
+        buffer = sentence;
+      } else {
+        buffer = next;
+      }
+    }
+    if (buffer) units.push(buffer);
+    return units.length > paragraphs.length ? units : paragraphs;
+  };
+
+  const sourceParagraphs = usingProvidedResearch && researchNotes
+    ? buildSourceUnits(researchNotes)
+    : [];
+
+  const getSourceParagraphsForRange = (startIndex: number, count: number): string[] => {
+    if (sourceParagraphs.length === 0) return [];
+    const endIndex = startIndex + count - 1;
+    const startRatio = (startIndex - 1) / targetPageCount;
+    const endRatio = endIndex / targetPageCount;
+    const start = clampNumber(Math.floor(sourceParagraphs.length * startRatio), 0, Math.max(0, sourceParagraphs.length - 1));
+    const endExclusive = clampNumber(Math.ceil(sourceParagraphs.length * endRatio), start + 1, sourceParagraphs.length);
+    return sourceParagraphs.slice(start, endExclusive);
+  };
+
   const pageRangeHint = (startIndex: number, count: number, priorTitles: string[], outline?: PlanOutline | null) => {
     const endIndex = startIndex + count - 1;
     const prior =
@@ -2576,8 +2667,35 @@ ${dialoguePromptRule}`;
 - 각 페이지는 panels가 ${isWebtoon ? "정적 앵커면 템플릿 컷 수, 동적이면 2~5개(webtoon_layout.panel_count와 일치)" : isDynamicLayout ? "2~5개 (webtoon_layout.panel_count와 일치)" : isLearningComicPro ? "선택한 template_id의 컷 수와 일치(3~7개)" : `반드시 ${panelsPerPage}개`}여야 합니다.${prior}${rangeOutlineReminder}`;
   };
 
-  const buildPaperPageOnlyContext = (startIndex: number, count: number, outline?: PlanOutline | null): string => {
-    return "";
+  const buildProvidedResearchPageContext = (startIndex: number, count: number, outline?: PlanOutline | null): string => {
+    if (!usingProvidedResearch || !researchNotes) return "";
+    const endIndex = startIndex + count - 1;
+    const sourceSlice = getSourceParagraphsForRange(startIndex, count);
+    const outlineSlice = outline?.page_outlines.filter(
+      (entry) => entry.page_number >= startIndex && entry.page_number <= endIndex
+    ) || [];
+    const outlineLines = outlineSlice.map((entry) => {
+      const bits = [
+        `p${entry.page_number}: ${entry.sub_topic}`,
+        entry.learning_action ? `학습 행동=${entry.learning_action}` : "",
+        entry.reader_question ? `질문=${entry.reader_question}` : "",
+        entry.allowed_content?.length ? `허용=${entry.allowed_content.join(" | ")}` : "",
+        entry.forbidden_content?.length ? `금지=${entry.forbidden_content.join(" | ")}` : "",
+      ].filter(Boolean);
+      return `- ${bits.join(" / ")}`;
+    });
+
+    return `
+
+[이번 페이지 범위에서만 볼 재료 - 자료 기반 학습만화]
+- 이번 응답은 ${startIndex}~${endIndex}페이지입니다. 아래 원고 구간과 페이지 아웃라인을 최우선으로 사용하세요.
+- 전체 해설 원고의 뒤쪽 정보를 앞당겨 넣지 마세요. 특히 forbidden_content, dont_explain_yet, 다음 페이지 힌트에 해당하는 내용은 이번 페이지에서 설명하지 마세요.
+- 아래 원고 구간이 짧더라도 새 사실을 만들지 말고, 장면/표정/비교 컷/질문으로 호흡을 만드세요.
+${outlineLines.length > 0 ? `\n[이번 범위 아웃라인]\n${outlineLines.join("\n")}` : ""}
+
+[이번 범위 해설 원고 구간]
+${sourceSlice.length > 0 ? sourceSlice.map((part, idx) => `${idx + 1}. ${part}`).join("\n\n") : researchNotes.slice(0, 4000)}
+`;
   };
 
   const requestPlanner = async (contents: string, responseSchema: any, enableSearch: boolean, schemaName: string) => {
@@ -2617,6 +2735,8 @@ ${dialoguePromptRule}`;
   - 각 페이지마다: 소주제(sub_topic), 내용 요약(content_summary 1~2문장), 서사적 기능(narrative_function), 이전 페이지와의 연결을 명시하세요.
   - 각 페이지는 고유한 소주제/정보를 담아야 합니다. 페이지 간 내용 중복은 금지입니다.
   - 전체 흐름이 자연스럽게 이어져야 합니다. (도입→전개→심화→마무리)
+  ${isKlingI2V ? `- I2V 아웃라인은 장면 목록이 아니라 클립 체인입니다. 각 페이지의 connection_to_previous에는 직전 클립 끝 상태에서 이번 시작 프레임으로 이어지는 구체적 물리 연결(위치, 시선, 손의 물체, 감정, 카메라 방향)을 적으세요.
+  - 설명/정보 단위보다 "동작의 이어짐"을 우선하세요. 같은 사건의 다음 순간으로 보이면 성공, 새 장면으로 리셋되면 실패입니다.` : ""}
   ${isLearningComic && !isAnyCinematic ? `- 먼저 자료를 설명 순서가 아니라 독자가 이해하는 순서로 나누세요. 한 페이지는 독자의 생각이 한 번 움직이는 정도면 충분합니다.
   - 각 페이지마다 reader_question(독자가 품을 궁금증), opening_scene(첫 컷에 보이는 장면), page_reveal(끝에서 붙잡을 것), dialogue_goal(말풍선이 하는 일), page_speech_flow(말의 호흡), dont_explain_yet(아직 미룰 정보)을 구분하세요.
   - page_speech_flow는 제작자가 조용히 읽어봤을 때 사람 말처럼 이어지는 짧은 흐름이어야 합니다. 발표문, 지시문, 규칙 설명처럼 쓰지 마세요.
@@ -2922,6 +3042,11 @@ ${dialoguePromptRule}`;
         return {
           scene: String(source.scene || `Frame ${pIdx + 1}`),
           acting: String(source.acting || "Natural motion."),
+          action_phase: typeof source.action_phase === "string" ? source.action_phase : "",
+          start_pose: typeof source.start_pose === "string" ? source.start_pose : "",
+          motion_continuation: typeof source.motion_continuation === "string" ? source.motion_continuation : "",
+          i2v_continuity_in: typeof source.i2v_continuity_in === "string" ? source.i2v_continuity_in : "",
+          i2v_continuity_out: typeof source.i2v_continuity_out === "string" ? source.i2v_continuity_out : "",
           dialogues: Array.isArray(source.dialogues)
             ? source.dialogues.filter((d: unknown) => typeof d === "string")
             : [],
@@ -2950,6 +3075,13 @@ ${dialoguePromptRule}`;
           index: pIdx + 1,
           scene: pan.scene,
           acting: pan.acting,
+          ...(isKlingI2V ? {
+            action_phase: pan.action_phase || "hold",
+            start_pose: pan.start_pose || pan.acting,
+            motion_continuation: pan.motion_continuation || pan.acting,
+            i2v_continuity_in: pan.i2v_continuity_in || (pageNumber === 1 ? "도입 시작 상태를 유지한다." : "이전 클립의 끝 상태를 자연스럽게 이어받는다."),
+            i2v_continuity_out: pan.i2v_continuity_out || pan.motion_continuation || pan.acting
+          } : {}),
           dialogues: pan.dialogues,
           camera: pan.camera,
           mood: pan.mood,
@@ -2964,7 +3096,7 @@ ${dialoguePromptRule}`;
 
   const runChunk = async (startIndex: number, count: number, priorTitles: string[], includePlanMeta: boolean, outlineContext: string, outline?: PlanOutline | null) => {
     const effectiveOutlineContext = outlineContext;
-    const pageOnlyContext = buildPaperPageOnlyContext(startIndex, count, outline);
+    const pageOnlyContext = buildProvidedResearchPageContext(startIndex, count, outline);
     const baseContents = `${prompt}${effectiveOutlineContext}${pageRangeHint(startIndex, count, priorTitles, outline)}${pageOnlyContext}`;
     const contentsWithoutResearch = baseContents;
     const contentsWithResearch = `${baseContents}${researchContext}`;
@@ -2988,7 +3120,7 @@ ${dialoguePromptRule}`;
   let outline: PlanOutline | null = null;
   let outlineSection = "";
   let outlineGroundingSources: GroundingSource[] = [];
-  const skipOutlineForProvidedNarrative = usingProvidedResearch && !isAnyCinematic;
+  const skipOutlineForProvidedNarrative = false;
 
   if (targetPageCount > 1 && !skipOutlineForProvidedNarrative) {
     try {
@@ -3378,9 +3510,14 @@ ${isKlingI2V
   const frameworkInstruction = (() => {
     if (isKlingI2V) return `
 [포맷: Kling I2V 스토리보드]
-- 페이지당 1프레임. scene/acting/camera/mood를 구체적으로 작성.
+- 페이지당 1프레임. scene/acting/camera/mood와 action_phase/start_pose/motion_continuation을 구체적으로 작성.
+- start_pose는 이미지 생성의 기준이고, motion_continuation은 영상화 방향입니다. 둘을 섞지 마세요.
+- i2v_continuity_in/out을 반드시 작성하고, 이전 클립 끝 상태가 다음 클립 시작 상태로 자연스럽게 이어지게 하세요.
+- 2페이지 이후 start_pose는 직전 페이지 i2v_continuity_out과 같은 장소/복장/소품/시선/감정선을 물려받아야 합니다.
+- 장면 전환이 필요하면 하드컷처럼 튀지 않게 camera/scene에 전환 이유를 넣고, i2v_continuity_in에 "명시적 전환"이라고 적으세요.
 - dialogues는 음성 대사(0~2줄), 화자 포함 형식("화자: 대사").
-- 자막/말풍선/화면 텍스트 지시 금지.`;
+- 자막/말풍선/화면 텍스트 지시 금지.
+${I2V_MOTION_TIMING_INSTRUCTION}`;
     if (isWebtoon) return `
 [포맷: 웹툰 모바일 페이지 — 다이나믹 레이아웃]
 - 정적 앵커 템플릿(template_id)은 최대 2페이지까지만, 정말 필요한 경우에만 사용하세요.
@@ -3564,6 +3701,7 @@ ${isLearningComicPro ? "- 프로 레이아웃에서는 template_id와 learning_l
     properties: {
       scene: { type: Type.STRING, description: "구체적인 장면 묘사" },
       acting: { type: Type.STRING, description: "캐릭터의 제스처/표정/몸짓" },
+      ...(isKlingI2V ? I2V_PANEL_MOTION_SCHEMA_PROPERTIES : {}),
       dialogues: {
         type: Type.ARRAY, items: { type: Type.STRING },
         description: isKlingI2V ? "음성 대사(0~2줄). 화자 포함 형식 권장." : "대사 내용만. 독백/내면=[thought] 접두사, 나레이션/해설=[narration] 접두사. 일반 대사는 접두사 없이."
@@ -3572,7 +3710,9 @@ ${isLearningComicPro ? "- 프로 레이아웃에서는 template_id와 learning_l
       mood: { type: Type.STRING },
       target_aspect_ratio: { type: Type.STRING }
     },
-    required: ["scene", "acting", "dialogues", "target_aspect_ratio"]
+    required: isKlingI2V
+      ? ["scene", "acting", "action_phase", "start_pose", "motion_continuation", "i2v_continuity_in", "i2v_continuity_out", "dialogues", "target_aspect_ratio"]
+      : ["scene", "acting", "dialogues", "target_aspect_ratio"]
   };
 
   const webtoonLayoutSchema = {
@@ -3933,6 +4073,11 @@ ${isLearningComicPro ? "- 프로 레이아웃에서는 template_id와 learning_l
         return {
           scene: String(source.scene || `Frame ${pIdx + 1}`),
           acting: String(source.acting || "Natural motion."),
+          action_phase: typeof source.action_phase === "string" ? source.action_phase : "",
+          start_pose: typeof source.start_pose === "string" ? source.start_pose : "",
+          motion_continuation: typeof source.motion_continuation === "string" ? source.motion_continuation : "",
+          i2v_continuity_in: typeof source.i2v_continuity_in === "string" ? source.i2v_continuity_in : "",
+          i2v_continuity_out: typeof source.i2v_continuity_out === "string" ? source.i2v_continuity_out : "",
           dialogues: Array.isArray(source.dialogues) ? source.dialogues.filter((d: unknown) => typeof d === "string") : [],
           camera: String(source.camera || "Eye-level"),
           mood: String(source.mood || "Neutral"),
@@ -3955,6 +4100,13 @@ ${isLearningComicPro ? "- 프로 레이아웃에서는 template_id와 learning_l
         },
         panels: normalizedPanels.map((pan, pIdx: number) => ({
           index: pIdx + 1, scene: pan.scene, acting: pan.acting,
+          ...(isKlingI2V ? {
+            action_phase: pan.action_phase || "hold",
+            start_pose: pan.start_pose || pan.acting,
+            motion_continuation: pan.motion_continuation || pan.acting,
+            i2v_continuity_in: pan.i2v_continuity_in || (pageNumber === 1 ? "도입 시작 상태를 유지한다." : "이전 클립의 끝 상태를 자연스럽게 이어받는다."),
+            i2v_continuity_out: pan.i2v_continuity_out || pan.motion_continuation || pan.acting
+          } : {}),
           dialogues: pan.dialogues, camera: pan.camera, mood: pan.mood,
           render: { target_aspect_ratio: isKlingI2V ? i2vAspectRatio : pan.target_aspect_ratio, safe_area_hint: "Leave space at edges for dialogue" }
         }))
@@ -4099,6 +4251,8 @@ ${params.script_text}`;
 - 위 텍스트를 총 ${targetPageCount}페이지의 만화로 각색하기 위한 장면 분해 아웃라인을 작성하세요.
 - 각 페이지마다: 장면 소제목(sub_topic), 내용 요약(1~2문장), 서사 기능(narrative_function), 이전 페이지 연결.
 - 원본 텍스트의 핵심 장면/대사/감정 비트를 빠뜨리지 마세요.
+${isKlingI2V ? `- I2V 아웃라인은 클립 체인입니다. 각 페이지의 이전 페이지 연결에는 직전 클립 끝 상태에서 이번 시작 프레임으로 이어질 위치/시선/손의 물체/감정/카메라 방향을 구체적으로 적으세요.
+- 같은 사건의 다음 순간처럼 이어지게 분해하고, 매 페이지를 새 장면으로 리셋하지 마세요.` : ""}
 ${isLearningComic && !storyAntiEducationGuardEnabled ? `- 학습만화 포맷에서는 먼저 텍스트를 학습 행동 단위로 나누고, 페이지마다 learning_action 하나만 배정하세요.
 - 각 페이지는 독자의 생각 한 걸음입니다. reader_question, opening_scene, page_reveal, dialogue_goal, dont_explain_yet을 구분하세요.
 - page_speech_flow에는 이 페이지의 설명자 말을 이어 읽었을 때 자연스럽게 들리는 짧은 흐름을 쓰세요. 발표문처럼 쓰지 마세요.

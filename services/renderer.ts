@@ -775,7 +775,7 @@ ${textCues}
   const toneLevel = series.anchors.tone_level || "medium";
   const toneNote =
     toneMode === "gag"
-      ? `STORY TONE MODE: Gag (comedic)\nGAG LEVEL: ${toneLevel}\n- low: subtle reactions, minimal slapstick.\n- medium: playful reactions + occasional visual jokes.\n- high: frequent comedic beats and exaggerated expressions.\n- Do NOT add offensive stereotypes, hate, or explicit sexual content.`
+      ? `STORY TONE MODE: Humor (comedic)\nHUMOR LEVEL: ${toneLevel}\n- low: subtle reactions, minimal slapstick.\n- medium: playful reactions + occasional visual jokes.\n- high: frequent comedic beats and exaggerated expressions.\n- Do NOT add offensive stereotypes, hate, or explicit sexual content.`
       : isStoryMode
         ? `STORY TONE MODE: Normal\n- Keep visuals cinematic-first: dramatic framing, emotional contrast, and story momentum over exposition.\n- Non-graphic action beats (combat/chase/collision) are allowed when the script calls for them; avoid gore.${storyAntiEducationGuardEnabled ? "\n- This is a creative/narrative work — do NOT add educational framing, captions, or explanatory overlays." : ""}`
         : isPureCinematic
@@ -956,6 +956,11 @@ ${castSupporting.length > 0 ? castSupporting.map((c) => `- ${formatCharacterLine
   const i2vPanel = page.panels[0] || {
     scene: "",
     acting: "",
+    action_phase: "",
+    start_pose: "",
+    motion_continuation: "",
+    i2v_continuity_in: "",
+    i2v_continuity_out: "",
     camera: "",
     mood: ""
   };
@@ -1107,9 +1112,21 @@ ${characterConsistencyNote}
 ${productNote}
 
 Scene: ${i2vPanel.scene || "Describe a clear cinematic moment."}
-Acting / Motion Intent: ${i2vPanel.acting || "Natural performance and motion-ready posture."}
+CONTINUITY IN - MATCH FROM PREVIOUS CLIP: ${i2vPanel.i2v_continuity_in || (page.page.index === 1 ? "Opening state for the first clip." : "Continue naturally from the previous clip's ending state.")}
+ACTION PHASE: ${i2vPanel.action_phase || "hold"}
+START FRAME POSE - CRITICAL: ${i2vPanel.start_pose || i2vPanel.acting || "Natural performance and motion-ready posture."}
+Acting / Performance Detail: ${i2vPanel.acting || "Natural performance and motion-ready posture."}
+MOTION CONTINUATION AFTER FIRST FRAME: ${i2vPanel.motion_continuation || i2vPanel.acting || "Continue with subtle natural motion."}
+CONTINUITY OUT - END STATE FOR NEXT CLIP: ${i2vPanel.i2v_continuity_out || i2vPanel.motion_continuation || i2vPanel.acting || "Leave a clear end state that the next clip can inherit."}
 Camera: ${i2vPanel.camera || "Eye-level"}
 Mood: ${i2vPanel.mood || "Neutral"}
+
+[I2V CONTINUITY RULES - CRITICAL]
+- This frame is one clip in a continuous chain, not a standalone poster.
+- The first-frame pose must visibly match CONTINUITY IN unless the scene explicitly states a transition.
+- Preserve location, outfit, held objects, gaze direction, character distance, and emotional state from the inherited continuity.
+- Compose the frame so the MOTION CONTINUATION can end at CONTINUITY OUT for the next clip.
+- Avoid sudden resets, new props, unexplained costume changes, or camera jumps.
 
 [TEXT RESTRICTIONS - CRITICAL]
 - No subtitles, no captions, no on-screen text, no speech bubbles.

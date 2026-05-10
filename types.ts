@@ -13,6 +13,14 @@ export type OutputMode = "comic" | "kling_i2v";
 export type PublicationFormat = "learning_comic" | "webtoon" | "manga" | "kling_i2v";
 export type MangaColorMode = "bw" | "color";
 export type I2VAspectRatio = "16:9" | "9:16" | "1:1";
+export type I2VActionPhase =
+  | "setup"
+  | "anticipation"
+  | "mid_action"
+  | "impact"
+  | "follow_through"
+  | "reaction"
+  | "hold";
 export type ToneMode = "normal" | "gag";
 export type ToneLevel = "low" | "medium" | "high";
 export type GeminiReasoningEffort = "low" | "medium" | "high";
@@ -439,6 +447,11 @@ export interface PanelSpec {
   index: number;
   scene: string;
   acting?: string;
+  action_phase?: I2VActionPhase | string;
+  start_pose?: string;
+  motion_continuation?: string;
+  i2v_continuity_in?: string;
+  i2v_continuity_out?: string;
   dialogues: string[];
   camera: string;
   mood: string;
