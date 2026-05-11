@@ -23,6 +23,8 @@
     "fflate": "^0.8.2",
     "lucide-react": "^0.560.0",
     "openai-oauth": "^1.0.2",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

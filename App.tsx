@@ -38,6 +38,21 @@ const STORY_MIN_INPUT_CHARS = 50;
 const REFERENCE_IMAGE_MAX_EDGE = 1024;
 const REFERENCE_IMAGE_JPEG_QUALITY = 0.82;
 
+const isTextLikeMaterialFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  return (
+    file.type.startsWith("text/") ||
+    name.endsWith(".md") ||
+    name.endsWith(".txt") ||
+    name.endsWith(".json")
+  );
+};
+
+const isPdfMaterialFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  return file.type === "application/pdf" || name.endsWith(".pdf");
+};
+
 const resolveMaxPageCount = (): number => {
   const raw = String(import.meta.env.VITE_MAX_PAGE_COUNT ?? "").trim();
   if (!raw) return DEFAULT_MAX_PAGE_COUNT;
@@ -59,24 +74,30 @@ const estimateDirectStoryPageSuggestions = (
 ): Record<ScriptDetail, number> => {
   const body = String(text || "").trim();
   const nonSpaceChars = body.replace(/\s/g, "").length;
+  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const paragraphs = body.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean).length;
-  const dialogueLines = body.split("\n").filter((line) => /[:：」"]/.test(line.trim())).length;
-  const structureHint =
-    inputType === "script"
-      ? Math.ceil(Math.max(dialogueLines, paragraphs) / 8)
-      : inputType === "prose"
-        ? Math.ceil(paragraphs / 3)
-        : Math.ceil(paragraphs / 2);
+  const sentenceBeats = body
+    .split(/[.!?。！？]+|\n+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 12).length;
+  const dialogueLines = lines.filter((line) => /["“”'‘’「」『』]|[:：]/.test(line)).length;
+  const sceneActionLines = lines.filter((line) => line.length >= 16 && !/^["“”'‘’「」『』]/.test(line)).length;
+  const storyBeats = Math.max(paragraphs, Math.ceil(sentenceBeats / 2), dialogueLines, sceneActionLines);
+  const beatBudgets: Record<StoryInputType, Record<ScriptDetail, number>> = {
+    script: { brief: 8, normal: 6, detailed: 4 },
+    prose: { brief: 8, normal: 5, detailed: 4 },
+    scenario: { brief: 6, normal: 4, detailed: 3 }
+  };
   const budgets: Record<StoryInputType, Record<ScriptDetail, number>> = {
-    script: { brief: 1400, normal: 950, detailed: 650 },
-    prose: { brief: 1100, normal: 750, detailed: 500 },
+    script: { brief: 1200, normal: 800, detailed: 560 },
+    prose: { brief: 950, normal: 620, detailed: 440 },
     scenario: { brief: 800, normal: 550, detailed: 380 }
   };
   const minPages: Record<ScriptDetail, number> = { brief: 1, normal: 2, detailed: 3 };
   return {
-    brief: clampPageCount(Math.max(minPages.brief, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].brief))),
-    normal: clampPageCount(Math.max(minPages.normal, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].normal))),
-    detailed: clampPageCount(Math.max(minPages.detailed, structureHint, Math.ceil(nonSpaceChars / budgets[inputType].detailed)))
+    brief: clampPageCount(Math.max(minPages.brief, Math.ceil(storyBeats / beatBudgets[inputType].brief), Math.ceil(nonSpaceChars / budgets[inputType].brief))),
+    normal: clampPageCount(Math.max(minPages.normal, Math.ceil(storyBeats / beatBudgets[inputType].normal), Math.ceil(nonSpaceChars / budgets[inputType].normal))),
+    detailed: clampPageCount(Math.max(minPages.detailed, Math.ceil(storyBeats / beatBudgets[inputType].detailed), Math.ceil(nonSpaceChars / budgets[inputType].detailed)))
   };
 };
 
@@ -3345,18 +3366,22 @@ const App: React.FC = () => {
   };
 
   const handleResearchFileChange = async (file: File | null) => {
-    setResearchReportFile(file);
     clearResearchDigest();
 
-    if (!file) return;
+    if (!file) {
+      setResearchReportFile(null);
+      return;
+    }
 
-    const isTextLike =
-      file.type.startsWith("text/") ||
-      file.name.toLowerCase().endsWith(".md") ||
-      file.name.toLowerCase().endsWith(".txt") ||
-      file.name.toLowerCase().endsWith(".json");
+    if (!isTextLikeMaterialFile(file) && !isPdfMaterialFile(file)) {
+      setResearchReportFile(null);
+      setResearchDigestError(ui("PDF, TXT, MD, JSON 파일만 지원해. 다른 문서는 내용을 복사해서 직접 입력에 붙여넣어줘.", "Only PDF, TXT, MD, and JSON files are supported. Paste other document text manually."));
+      return;
+    }
 
-    if (isTextLike) {
+    setResearchReportFile(file);
+
+    if (isTextLikeMaterialFile(file)) {
       try {
         const text = await file.text();
         setResearchReportText(text);
@@ -3397,11 +3422,15 @@ const App: React.FC = () => {
 
     try {
       const hasUserMaterial = Boolean(researchReportText.trim() || researchReportFile);
+      const researchFileForUpload =
+        researchReportFile && isPdfMaterialFile(researchReportFile)
+          ? researchReportFile
+          : undefined;
       const result = hasUserMaterial
         ? await analyzeResearchReport({
           topic: effectiveTopic,
           report_text: researchReportText,
-          file: researchReportFile || undefined
+          file: researchFileForUpload
         })
         : await generateGeminiResearchPack({
           topic: effectiveTopic,

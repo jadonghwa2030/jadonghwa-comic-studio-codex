@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { PDFParse } from "pdf-parse";
+import { PDFDocument } from "pdf-lib";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +15,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const PORT = Number.parseInt(process.env.LOCAL_API_PORT || process.env.PORT || "8787", 10);
 const HOST = String(process.env.LOCAL_API_HOST || process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
-const JSON_LIMIT = process.env.LOCAL_API_JSON_LIMIT || "50mb";
+const JSON_LIMIT = process.env.LOCAL_API_JSON_LIMIT || "180mb";
 const PROJECT_ARCHIVE_PATH = path.resolve(
   process.env.LOCAL_PROJECT_ARCHIVE_PATH || path.join(process.cwd(), "local-project-archive", "projects.json")
 );
@@ -30,6 +32,33 @@ const CODEX_VALID_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"])
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
 const GEMINI_TEXT_MODEL = String(process.env.GEMINI_TEXT_MODEL || "gemini-3-pro-preview").trim() || "gemini-3-pro-preview";
 const GEMINI_API_BASE_URL = String(process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
+const GEMINI_UPLOAD_BASE_URL = String(
+  process.env.GEMINI_UPLOAD_BASE_URL ||
+    GEMINI_API_BASE_URL.replace(/\/(v1beta|v1alpha|v1)$/, "/upload/$1")
+).replace(/\/+$/, "");
+const GEMINI_FILE_API_INLINE_MAX_BYTES = Number.parseInt(
+  process.env.GEMINI_FILE_API_INLINE_MAX_BYTES || `${18 * 1024 * 1024}`,
+  10
+);
+const GEMINI_PDF_MAX_BYTES = Number.parseInt(
+  process.env.GEMINI_PDF_MAX_BYTES || `${50 * 1024 * 1024}`,
+  10
+);
+const GEMINI_PDF_TEXT_FALLBACK_MAX_CHARS = Number.parseInt(
+  process.env.GEMINI_PDF_TEXT_FALLBACK_MAX_CHARS || "120000",
+  10
+);
+const GEMINI_PDF_SPLIT_TARGET_BYTES = Number.parseInt(
+  process.env.GEMINI_PDF_SPLIT_TARGET_BYTES || `${45 * 1024 * 1024}`,
+  10
+);
+const GEMINI_PDF_SPLIT_MAX_PARTS = Number.parseInt(
+  process.env.GEMINI_PDF_SPLIT_MAX_PARTS || "12",
+  10
+);
+const GEMINI_FILE_API_ALWAYS_UPLOAD_PDFS = !/^(0|false|no)$/i.test(
+  String(process.env.GEMINI_FILE_API_ALWAYS_UPLOAD_PDFS || "true")
+);
 const GPT_IMAGE_DIMENSION_STEP = 16;
 const GPT_IMAGE_MAX_EDGE = 3840;
 const GPT_IMAGE_MAX_PIXELS = 8_294_400;
@@ -630,13 +659,273 @@ const generateCodexContent = async (request) => {
   };
 };
 
-const buildGeminiPart = (part) => {
+const getBase64ByteLength = (value) => {
+  try {
+    return Buffer.byteLength(String(value || ""), "base64");
+  } catch {
+    return 0;
+  }
+};
+
+const shouldUploadGeminiFile = (mimeType, data) => {
+  const normalizedMime = String(mimeType || "").toLowerCase();
+  if (GEMINI_FILE_API_ALWAYS_UPLOAD_PDFS && normalizedMime === "application/pdf") return true;
+  const byteLength = getBase64ByteLength(data);
+  return byteLength > GEMINI_FILE_API_INLINE_MAX_BYTES;
+};
+
+const buildPdfTextFallbackPart = async ({ data, displayName }) => {
+  const bytes = Buffer.from(String(data || ""), "base64");
+  const parser = new PDFParse({ data: bytes });
+  try {
+    const result = await parser.getText();
+    const fullText = String(result?.text || "").replace(/\s+\n/g, "\n").trim();
+    if (!fullText) {
+      const err = new Error("PDF에서 추출할 수 있는 텍스트가 없었어. 스캔 이미지 PDF라면 텍스트 복사본이나 OCR된 PDF가 필요해.");
+      err.status = 422;
+      throw err;
+    }
+
+    const maxChars = Number.isFinite(GEMINI_PDF_TEXT_FALLBACK_MAX_CHARS) && GEMINI_PDF_TEXT_FALLBACK_MAX_CHARS > 0
+      ? GEMINI_PDF_TEXT_FALLBACK_MAX_CHARS
+      : 120000;
+    const truncated = fullText.length > maxChars;
+    const text = truncated ? fullText.slice(0, maxChars) : fullText;
+    const sizeMb = (bytes.byteLength / 1024 / 1024).toFixed(1);
+    const fileLabel = sanitizeErrorMessage(displayName || "uploaded PDF") || "uploaded PDF";
+
+    return {
+      text: [
+        `[PDF text extracted locally because the original PDF exceeds Gemini's PDF upload limit.]`,
+        `File: ${fileLabel}`,
+        `Original PDF size: ${sizeMb}MB`,
+        `Extracted pages: ${result?.total || "unknown"}`,
+        truncated ? `Note: extracted text was truncated to ${maxChars} characters for the model request.` : "",
+        "",
+        text
+      ].filter(Boolean).join("\n")
+    };
+  } finally {
+    await parser.destroy();
+  }
+};
+
+const createPdfChunkBuffer = async (sourcePdf, pageIndices) => {
+  const chunkPdf = await PDFDocument.create();
+  const copiedPages = await chunkPdf.copyPages(sourcePdf, pageIndices);
+  copiedPages.forEach((page) => chunkPdf.addPage(page));
+  return Buffer.from(await chunkPdf.save());
+};
+
+const splitPdfForGeminiUpload = async ({ data, displayName }) => {
+  const bytes = Buffer.from(String(data || ""), "base64");
+  const sourcePdf = await PDFDocument.load(bytes, {
+    ignoreEncryption: true,
+    updateMetadata: false
+  });
+  const pageCount = sourcePdf.getPageCount();
+  const targetBytes = Math.min(
+    Math.max(GEMINI_PDF_SPLIT_TARGET_BYTES || 0, 1024 * 1024),
+    GEMINI_PDF_MAX_BYTES
+  );
+  const maxParts = Math.max(GEMINI_PDF_SPLIT_MAX_PARTS || 0, 1);
+  const chunks = [];
+  let pageIndices = [];
+
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+    const candidateIndices = [...pageIndices, pageIndex];
+    const candidateBytes = await createPdfChunkBuffer(sourcePdf, candidateIndices);
+
+    if (candidateBytes.byteLength > targetBytes && pageIndices.length > 0) {
+      chunks.push({
+        pageStart: pageIndices[0] + 1,
+        pageEnd: pageIndices[pageIndices.length - 1] + 1,
+        bytes: await createPdfChunkBuffer(sourcePdf, pageIndices)
+      });
+      pageIndices = [pageIndex];
+      continue;
+    }
+
+    if (candidateBytes.byteLength > GEMINI_PDF_MAX_BYTES) {
+      const fileLabel = displayName ? ` (${sanitizeErrorMessage(displayName)})` : "";
+      const err = new Error(`PDF${fileLabel}의 단일 페이지가 Gemini PDF 한도 50MB를 넘어. 이 경우에는 해당 페이지를 압축하거나 텍스트/OCR 자료로 넣어줘.`);
+      err.status = 413;
+      throw err;
+    }
+
+    pageIndices = candidateIndices;
+  }
+
+  if (pageIndices.length > 0) {
+    chunks.push({
+      pageStart: pageIndices[0] + 1,
+      pageEnd: pageIndices[pageIndices.length - 1] + 1,
+      bytes: await createPdfChunkBuffer(sourcePdf, pageIndices)
+    });
+  }
+
+  if (chunks.length > maxParts) {
+    const err = new Error(`PDF를 ${chunks.length}개 조각으로 나눠야 해서 중단했어. 현재 자동 분할 한도는 ${maxParts}개야. 논문 일부만 넣거나 GEMINI_PDF_SPLIT_MAX_PARTS를 올려줘.`);
+    err.status = 413;
+    throw err;
+  }
+
+  return chunks;
+};
+
+const buildSplitPdfFileParts = async ({ data, mimeType, displayName }) => {
+  try {
+    const chunks = await splitPdfForGeminiUpload({ data, displayName });
+    const totalParts = chunks.length;
+    const fileLabel = sanitizeErrorMessage(displayName || "uploaded PDF") || "uploaded PDF";
+    const parts = [
+      {
+        text: [
+          `[The uploaded PDF was larger than Gemini's single-PDF limit, so the local server split it into ${totalParts} page-range PDFs.]`,
+          `Original file: ${fileLabel}`,
+          `Use all PDF parts together as one continuous source document.`
+        ].join("\n")
+      }
+    ];
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const uploaded = await uploadGeminiFileFromBase64({
+        data: chunk.bytes.toString("base64"),
+        mimeType,
+        displayName: `${fileLabel} pages ${chunk.pageStart}-${chunk.pageEnd} (${index + 1}/${totalParts})`
+      });
+      parts.push({
+        fileData: {
+          mimeType: uploaded.mimeType,
+          fileUri: uploaded.fileUri
+        }
+      });
+    }
+
+    return parts;
+  } catch (error) {
+    console.warn("[api] gemini pdf split upload failed, trying text extraction fallback", {
+      message: sanitizeErrorMessage(error?.message)
+    });
+    return [await buildPdfTextFallbackPart({ data, displayName })];
+  }
+};
+
+const assertGeminiFileSizeSupported = (mimeType, data, displayName) => {
+  const normalizedMime = String(mimeType || "").toLowerCase();
+  const byteLength = getBase64ByteLength(data);
+  if (normalizedMime === "application/pdf" && byteLength > GEMINI_PDF_MAX_BYTES) {
+    const sizeMb = (byteLength / 1024 / 1024).toFixed(1);
+    const maxMb = Math.floor(GEMINI_PDF_MAX_BYTES / 1024 / 1024);
+    const fileLabel = displayName ? ` (${sanitizeErrorMessage(displayName)})` : "";
+    const err = new Error(`Gemini PDF 한도는 ${maxMb}MB야. 업로드한 PDF${fileLabel}는 약 ${sizeMb}MB라서, 자동 PDF 분할이 필요해.`);
+    err.status = 413;
+    throw err;
+  }
+};
+
+const uploadGeminiFileFromBase64 = async ({ data, mimeType, displayName }) => {
+  const bytes = Buffer.from(String(data || ""), "base64");
+  if (bytes.byteLength === 0) {
+    const err = new Error("Gemini file upload failed: file data was empty.");
+    err.status = 400;
+    throw err;
+  }
+
+  const startResponse = await fetch(`${GEMINI_UPLOAD_BASE_URL}/files?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(bytes.byteLength),
+      "X-Goog-Upload-Header-Content-Type": mimeType
+    },
+    body: JSON.stringify({
+      file: {
+        display_name: sanitizeErrorMessage(displayName || "uploaded-file") || "uploaded-file"
+      }
+    })
+  });
+
+  if (!startResponse.ok) {
+    const rawText = await startResponse.text();
+    const message = sanitizeErrorMessage(parseJsonSafe(rawText)?.error?.message || rawText) ||
+      `Gemini file upload start failed (${startResponse.status}).`;
+    const err = new Error(message);
+    err.status = startResponse.status;
+    throw err;
+  }
+
+  const uploadUrl = startResponse.headers.get("x-goog-upload-url");
+  if (!uploadUrl) {
+    const err = new Error("Gemini file upload did not return an upload URL.");
+    err.status = 502;
+    throw err;
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Length": String(bytes.byteLength),
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize"
+    },
+    body: bytes
+  });
+
+  if (!uploadResponse.ok) {
+    const rawText = await uploadResponse.text();
+    const message = sanitizeErrorMessage(parseJsonSafe(rawText)?.error?.message || rawText) ||
+      `Gemini file upload failed (${uploadResponse.status}).`;
+    const err = new Error(message);
+    err.status = uploadResponse.status;
+    throw err;
+  }
+
+  const json = await uploadResponse.json();
+  const fileUri = String(json?.file?.uri || "").trim();
+  const uploadedMimeType = String(json?.file?.mimeType || json?.file?.mime_type || mimeType).trim() || mimeType;
+  if (!fileUri) {
+    const err = new Error("Gemini file upload did not return a file URI.");
+    err.status = 502;
+    throw err;
+  }
+
+  return {
+    fileUri,
+    mimeType: uploadedMimeType
+  };
+};
+
+const buildGeminiPart = async (part) => {
   if (typeof part?.text === "string") return { text: part.text };
 
   const inlineData = part?.inlineData || part?.inline_data;
   const mimeType = inlineData?.mimeType || inlineData?.mime_type || "application/octet-stream";
   const data = inlineData?.data;
   if (typeof data === "string" && data.trim()) {
+    const displayName = inlineData?.name || inlineData?.displayName || inlineData?.display_name || "uploaded-file";
+    const normalizedMime = String(mimeType || "").toLowerCase();
+    const byteLength = getBase64ByteLength(data);
+    if (normalizedMime === "application/pdf" && byteLength > GEMINI_PDF_MAX_BYTES) {
+      return await buildSplitPdfFileParts({ data, mimeType, displayName });
+    }
+    assertGeminiFileSizeSupported(mimeType, data, displayName);
+    if (shouldUploadGeminiFile(mimeType, data)) {
+      const uploaded = await uploadGeminiFileFromBase64({
+        data,
+        mimeType,
+        displayName
+      });
+      return {
+        fileData: {
+          mimeType: uploaded.mimeType,
+          fileUri: uploaded.fileUri
+        }
+      };
+    }
     return {
       inlineData: {
         mimeType,
@@ -648,11 +937,13 @@ const buildGeminiPart = (part) => {
   return null;
 };
 
-const normalizeGeminiContents = (request) => {
+const normalizeGeminiContents = async (request) => {
   const contents = request?.contents;
   if (Array.isArray(contents)) return contents;
 
-  const parts = getRequestParts(request).map(buildGeminiPart).filter(Boolean);
+  const parts = (await Promise.all(getRequestParts(request).map(buildGeminiPart)))
+    .flat()
+    .filter(Boolean);
   return [{ role: "user", parts }];
 };
 
@@ -670,13 +961,13 @@ const buildGeminiGenerationConfig = (request) => {
   return generationConfig;
 };
 
-const buildGeminiBody = (request) => {
+const buildGeminiBody = async (request) => {
   const config = request?.config || {};
   const systemInstruction = String(config.systemInstruction || config.system_instruction || "").trim();
   const tools = Array.isArray(config.tools) ? config.tools : [];
   const generationConfig = buildGeminiGenerationConfig(request);
   const body = {
-    contents: normalizeGeminiContents(request),
+    contents: await normalizeGeminiContents(request),
     ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
     ...(tools.length > 0 ? { tools } : {})
   };
@@ -710,7 +1001,7 @@ const generateGeminiContent = async (request) => {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildGeminiBody(request))
+    body: JSON.stringify(await buildGeminiBody(request))
   });
 
   if (!response.ok) {
@@ -738,6 +1029,23 @@ const generateGeminiContent = async (request) => {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: JSON_LIMIT }));
+app.use((err, _req, res, next) => {
+  if (!err) {
+    next();
+    return;
+  }
+  if (err.type === "entity.too.large") {
+    const message = `요청 자료가 너무 커서 로컬 API가 받지 못했어. 더 작은 PDF/TXT를 쓰거나 LOCAL_API_JSON_LIMIT 값을 현재 ${JSON_LIMIT}보다 크게 올린 뒤 서버를 다시 시작해줘.`;
+    console.error("[api] request payload too large", {
+      limit: JSON_LIMIT,
+      length: err.length,
+      expected: err.expected
+    });
+    res.status(413).json({ error: { message } });
+    return;
+  }
+  next(err);
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -746,6 +1054,11 @@ app.get("/api/health", (_req, res) => {
     codex_image_model: CODEX_DEFAULT_IMAGE_MODEL,
     codex_text_model: CODEX_DEFAULT_TEXT_MODEL,
     gemini_text_model: GEMINI_TEXT_MODEL,
+    local_api_json_limit: JSON_LIMIT,
+    gemini_file_api_always_upload_pdfs: GEMINI_FILE_API_ALWAYS_UPLOAD_PDFS,
+    gemini_pdf_max_bytes: GEMINI_PDF_MAX_BYTES,
+    gemini_pdf_split_target_bytes: GEMINI_PDF_SPLIT_TARGET_BYTES,
+    gemini_pdf_split_max_parts: GEMINI_PDF_SPLIT_MAX_PARTS,
     gemini_api_configured: Boolean(GEMINI_API_KEY)
   });
 });

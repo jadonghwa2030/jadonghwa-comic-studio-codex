@@ -13,7 +13,11 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
   try {
     const text = await response.text();
-    if (text.trim()) return text.trim();
+    const trimmed = text.trim();
+    if (/PayloadTooLargeError|request entity too large/i.test(trimmed)) {
+      return "요청 자료가 너무 커서 로컬 API가 받지 못했어. 더 작은 파일을 쓰거나 LOCAL_API_JSON_LIMIT 값을 올린 뒤 서버를 다시 시작해줘.";
+    }
+    if (trimmed) return trimmed;
   } catch {
     // ignore
   }
@@ -40,4 +44,3 @@ export const postJson = async <T>(url: string, body: unknown): Promise<T> => {
   }
   return (await response.json()) as T;
 };
-

@@ -101,6 +101,10 @@ Important `.env.example` values:
 - `CODEX_OAUTH_PROXY_PORT=10531`
 - `LOCAL_API_PORT=8787`
 - `LOCAL_API_HOST=127.0.0.1`
+- `LOCAL_API_JSON_LIMIT=180mb`
+- `GEMINI_FILE_API_ALWAYS_UPLOAD_PDFS=true`
+- `GEMINI_PDF_MAX_BYTES=52428800` (50MB Gemini PDF limit)
+- `GEMINI_PDF_SPLIT_TARGET_BYTES=47185920` (larger PDFs are split into page-range PDFs)
 - `GEMINI_TEXT_MODEL=gemini-3-pro-preview`
 - `GEMINI_API_KEY=...` in `.env.local`
 - `CODEX_IMAGE_MODEL=gpt-5.4-mini`
